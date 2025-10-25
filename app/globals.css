@@ -1,0 +1,263 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Light Mode: Minimal white-blue palette (#F8FAFF → #007AFF) */
+  --background: 249 250 255; /* #F9FAFF */
+  --foreground: 10 31 68; /* Deep navy for text */
+  --card: 255 255 255;
+  --card-foreground: 10 31 68;
+  --popover: 255 255 255;
+  --popover-foreground: 10 31 68;
+  --primary: 0 122 255; /* #007AFF */
+  --primary-foreground: 255 255 255;
+  --secondary: 248 250 255;
+  --secondary-foreground: 10 31 68;
+  --muted: 241 245 255;
+  --muted-foreground: 71 85 105;
+  --accent: 0 198 255; /* #00C6FF */
+  --accent-foreground: 255 255 255;
+  --destructive: 239 68 68;
+  --destructive-foreground: 255 255 255;
+  --success: 34 197 94;
+  --success-foreground: 255 255 255;
+  --warning: 251 191 36;
+  --warning-foreground: 10 31 68;
+  --border: 226 232 240;
+  --input: 226 232 240;
+  --ring: 0 122 255;
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --radius: 1.25rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  /* Dark Mode: Gradient navy-blue (#020B1B → #0A1F44), glowing cyan (#00E0FF) */
+  --background: 2 11 27; /* #020B1B */
+  --foreground: 248 250 255; /* Off-white */
+  --card: 10 31 68; /* #0A1F44 */
+  --card-foreground: 248 250 255;
+  --popover: 10 31 68;
+  --popover-foreground: 248 250 255;
+  --primary: 0 122 255; /* #007AFF */
+  --primary-foreground: 255 255 255;
+  --secondary: 15 40 75;
+  --secondary-foreground: 248 250 255;
+  --muted: 15 40 75;
+  --muted-foreground: 148 163 184;
+  --accent: 0 224 255; /* #00E0FF glowing cyan */
+  --accent-foreground: 2 11 27;
+  --destructive: 239 68 68;
+  --destructive-foreground: 255 255 255;
+  --success: 34 197 94;
+  --success-foreground: 255 255 255;
+  --warning: 251 191 36;
+  --warning-foreground: 2 11 27;
+  --border: 30 58 95;
+  --input: 30 58 95;
+  --ring: 0 224 255;
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
+}
+
+@theme inline {
+  --font-sans: "Inter", "SF Pro Display", system-ui, -apple-system;
+  --font-mono: "Geist Mono", "SF Mono", monospace;
+
+  /* Using RGB values for Tailwind v4 compatibility */
+  --color-background: rgb(var(--background));
+  --color-foreground: rgb(var(--foreground));
+  --color-card: rgb(var(--card));
+  --color-card-foreground: rgb(var(--card-foreground));
+  --color-popover: rgb(var(--popover));
+  --color-popover-foreground: rgb(var(--popover-foreground));
+  --color-primary: rgb(var(--primary));
+  --color-primary-foreground: rgb(var(--primary-foreground));
+  --color-secondary: rgb(var(--secondary));
+  --color-secondary-foreground: rgb(var(--secondary-foreground));
+  --color-muted: rgb(var(--muted));
+  --color-muted-foreground: rgb(var(--muted-foreground));
+  --color-accent: rgb(var(--accent));
+  --color-accent-foreground: rgb(var(--accent-foreground));
+  --color-destructive: rgb(var(--destructive));
+  --color-destructive-foreground: rgb(var(--destructive-foreground));
+  --color-success: rgb(var(--success));
+  --color-success-foreground: rgb(var(--success-foreground));
+  --color-warning: rgb(var(--warning));
+  --color-warning-foreground: rgb(var(--warning-foreground));
+  --color-border: rgb(var(--border));
+  --color-input: rgb(var(--input));
+  --color-ring: rgb(var(--ring));
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 8px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground transition-colors duration-500;
+    /* Dark mode gradient background */
+    background: rgb(var(--background));
+  }
+
+  .dark body {
+    background: linear-gradient(135deg, #020b1b 0%, #0a1f44 100%);
+  }
+}
+
+/* Cinematic glass effects and animations for Hulu/Apple/Cluely aesthetic */
+@layer utilities {
+  .glass-blur {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+
+  .dark .glass-blur {
+    background: rgba(10, 31, 68, 0.7);
+    border: 1px solid rgba(30, 58, 95, 0.5);
+  }
+
+  .glass-card {
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+  }
+
+  .dark .glass-card {
+    background: rgba(10, 31, 68, 0.8);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(30, 58, 95, 0.5) inset, 0 0 40px rgba(0, 122, 255, 0.1);
+  }
+
+  .gradient-blue {
+    background: linear-gradient(135deg, #007aff 0%, #00c6ff 100%);
+  }
+
+  .dark .gradient-blue {
+    background: linear-gradient(135deg, #007aff 0%, #00e0ff 100%);
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, #007aff 0%, #00c6ff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .dark .gradient-text {
+    background: linear-gradient(135deg, #007aff 0%, #00e0ff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .glow-hover {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .glow-hover:hover {
+    box-shadow: 0 0 30px rgba(0, 122, 255, 0.5);
+    transform: translateY(-2px);
+  }
+
+  .dark .glow-hover:hover {
+    box-shadow: 0 0 40px rgba(0, 224, 255, 0.6);
+  }
+
+  .btn-gradient {
+    background: linear-gradient(135deg, #007aff 0%, #00c6ff 100%);
+    transition: all 0.3s ease;
+  }
+
+  .btn-gradient:hover {
+    box-shadow: 0 0 30px rgba(0, 122, 255, 0.6);
+    transform: translateY(-2px);
+  }
+
+  .dark .btn-gradient {
+    background: linear-gradient(135deg, #007aff 0%, #00e0ff 100%);
+  }
+
+  .dark .btn-gradient:hover {
+    box-shadow: 0 0 40px rgba(0, 224, 255, 0.7);
+  }
+
+  .floating-animation {
+    animation: floating 6s ease-in-out infinite;
+  }
+
+  @keyframes floating {
+    0%,
+    100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-20px);
+    }
+  }
+
+  .parallax-glow {
+    position: relative;
+  }
+
+  .parallax-glow::before {
+    content: "";
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 30% 50%, rgba(0, 122, 255, 0.15) 0%, transparent 50%),
+      radial-gradient(circle at 70% 80%, rgba(0, 198, 255, 0.15) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  .dark .parallax-glow::before {
+    background: radial-gradient(circle at 30% 50%, rgba(0, 122, 255, 0.2) 0%, transparent 50%),
+      radial-gradient(circle at 70% 80%, rgba(0, 224, 255, 0.2) 0%, transparent 50%);
+  }
+}
