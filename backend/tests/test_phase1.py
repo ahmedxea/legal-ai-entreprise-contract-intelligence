@@ -271,10 +271,6 @@ def client(tmp_path_factory):
     from app.services.sqlite_service import DatabaseService
     test_db = DatabaseService(db_path=db_path)
 
-    from app.services.storage_quota_service import storage_quota_service as _quota_svc
-    _original_db = _quota_svc._db
-    _quota_svc._db = test_db
-
     from main import app
     from fastapi.testclient import TestClient
 
@@ -291,8 +287,6 @@ def client(tmp_path_factory):
         ),
     ):
         yield TestClient(app)
-
-    _quota_svc._db = _original_db
 
 
 class TestUploadValidation:

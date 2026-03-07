@@ -1,288 +1,402 @@
 "use client"
 
+import { Suspense } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { FileCode, Sparkles, Copy, Download, RefreshCw, ChevronRight, Lock, ClipboardList, Scale, Banknote, Lightbulb, Users } from "lucide-react"
+import {
+  FileCode,
+  Sparkles,
+  Copy,
+  RefreshCw,
+  Lock,
+  ClipboardList,
+  Scale,
+  Banknote,
+  Lightbulb,
+  Users,
+  Shield,
+  Globe,
+  FileWarning,
+  Gavel,
+  Ban,
+  Eye,
+  Handshake,
+  Clock,
+  Loader2,
+  CheckCircle,
+  AlertTriangle,
+  ChevronRight,
+} from "lucide-react"
 import { type LucideIcon } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
+import { apiClient, type GeneratedClause, type CuadTemplate } from "@/lib/api-client"
 
-export default function ClauseGeneratorPage() {
-  const [selectedCategory, setSelectedCategory] = useState<string>("confidentiality")
-  const [generatedClause, setGeneratedClause] = useState<string>("")
+const CLAUSE_ICONS: Record<string, LucideIcon> = {
+  governing_law: Globe,
+  confidentiality: Lock,
+  termination: ClipboardList,
+  liability: Scale,
+  indemnification: Shield,
+  payment_terms: Banknote,
+  intellectual_property: Lightbulb,
+  data_protection: Eye,
+  force_majeure: FileWarning,
+  non_compete: Ban,
+  exclusivity: Handshake,
+  change_of_control: Users,
+  anti_assignment: Gavel,
+  audit_rights: FileCode,
+  post_termination_services: Clock,
+}
+
+const JURISDICTION_OPTIONS = [
+  { value: "", label: "General / Not specified" },
+  { value: "qatar", label: "Qatar" },
+  { value: "uae", label: "UAE" },
+  { value: "uk", label: "United Kingdom" },
+  { value: "usa", label: "United States" },
+  { value: "eu", label: "European Union" },
+]
+
+function ClauseGeneratorContent() {
+  const searchParams = useSearchParams()
+
+  // Pre-fill from query params (coming from contract detail page)
+  const prefillType = searchParams.get("type") ?? ""
+  const prefillRisk = searchParams.get("risk") ?? ""
+  const prefillJurisdiction = searchParams.get("jurisdiction") ?? ""
+  const prefillContext = searchParams.get("context") ?? ""
+
+  const [templates, setTemplates] = useState<CuadTemplate[]>([])
+  const [selectedType, setSelectedType] = useState(prefillType || "confidentiality")
+  const [riskDescription, setRiskDescription] = useState(prefillRisk)
+  const [jurisdiction, setJurisdiction] = useState(prefillJurisdiction)
+  const [contractContext, setContractContext] = useState(prefillContext)
+  const [generatedClause, setGeneratedClause] = useState<GeneratedClause | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
-  const clauseCategories: { id: string; name: string; Icon: LucideIcon; count: number }[] = [
-    { id: "confidentiality", name: "Confidentiality", Icon: Lock, count: 12 },
-    { id: "termination", name: "Termination", Icon: ClipboardList, count: 8 },
-    { id: "liability", name: "Liability & Indemnity", Icon: Scale, count: 10 },
-    { id: "payment", name: "Payment Terms", Icon: Banknote, count: 6 },
-    { id: "ip", name: "Intellectual Property", Icon: Lightbulb, count: 9 },
-    { id: "dispute", name: "Dispute Resolution", Icon: Users, count: 7 },
-  ]
+  // Auto-generate if pre-filled from contract detail
+  const [autoGenTriggered, setAutoGenTriggered] = useState(false)
 
-  const clauseTemplates = {
-    confidentiality: [
-      {
-        name: "Standard NDA Clause",
-        description: "Basic confidentiality agreement for general business use",
-        jurisdiction: "US",
-      },
-      {
-        name: "Mutual Confidentiality",
-        description: "Two-way confidentiality for partnerships",
-        jurisdiction: "US",
-      },
-      {
-        name: "GDPR-Compliant Confidentiality",
-        description: "EU data protection compliant confidentiality clause",
-        jurisdiction: "EU",
-      },
-    ],
-    termination: [
-      {
-        name: "Termination for Convenience",
-        description: "Allow either party to terminate with notice",
-        jurisdiction: "US",
-      },
-      {
-        name: "Termination for Cause",
-        description: "Termination based on breach or non-performance",
-        jurisdiction: "US",
-      },
-    ],
+  useEffect(() => {
+    loadTemplates()
+  }, [])
+
+  useEffect(() => {
+    if (prefillType && prefillRisk && !autoGenTriggered) {
+      setAutoGenTriggered(true)
+      handleGenerate()
+    }
+  }, [prefillType, prefillRisk, autoGenTriggered])
+
+  const loadTemplates = async () => {
+    try {
+      const t = await apiClient.getCuadTemplates()
+      setTemplates(t)
+    } catch {
+      // Fallback: use default list
+    }
   }
 
-  const sampleClause = `CONFIDENTIALITY AND NON-DISCLOSURE
-
-1. Definition of Confidential Information
-   "Confidential Information" means any and all technical and non-technical information disclosed by either party, including but not limited to:
-   (a) Trade secrets, know-how, inventions, techniques, processes, algorithms, software programs, and software source documents;
-   (b) Information regarding plans for research, development, new products, marketing and selling, business plans, budgets and unpublished financial statements;
-   (c) Customer and supplier lists, pricing information, and other proprietary information.
-
-2. Obligations
-   The Receiving Party agrees to:
-   (a) Hold and maintain the Confidential Information in strict confidence;
-   (b) Not disclose the Confidential Information to any third parties without prior written consent;
-   (c) Use the Confidential Information solely for the purpose of this Agreement;
-   (d) Protect the Confidential Information using the same degree of care used to protect its own confidential information, but in no event less than reasonable care.
-
-3. Exceptions
-   The obligations set forth in this Section shall not apply to information that:
-   (a) Was publicly known at the time of disclosure or becomes publicly known through no breach of this Agreement;
-   (b) Was rightfully received from a third party without breach of any confidentiality obligation;
-   (c) Was independently developed without use of or reference to the Confidential Information;
-   (d) Is required to be disclosed by law or court order, provided that the Receiving Party provides prompt notice to the Disclosing Party.
-
-4. Term
-   The obligations under this Section shall survive for a period of five (5) years from the date of disclosure of the Confidential Information.`
-
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setIsGenerating(true)
-    setTimeout(() => {
-      setGeneratedClause(sampleClause)
+    setError(null)
+    setGeneratedClause(null)
+    setCopied(false)
+
+    try {
+      const result = await apiClient.generateClause({
+        clause_type: selectedType,
+        risk_description: riskDescription,
+        jurisdiction,
+        contract_context: contractContext,
+      })
+      setGeneratedClause(result)
+    } catch (e: any) {
+      setError(e.message ?? "Failed to generate clause")
+    } finally {
       setIsGenerating(false)
-    }, 2000)
+    }
   }
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(generatedClause)
+    if (generatedClause) {
+      navigator.clipboard.writeText(generatedClause.clause_text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
   }
 
+  // Build category list from templates or fallback
+  const categories = templates.length > 0
+    ? templates.map((t) => ({
+        id: t.clause_type,
+        name: t.title,
+        cuadCategory: t.cuad_category,
+      }))
+    : Object.entries(CLAUSE_ICONS).map(([key]) => ({
+        id: key,
+        name: key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+        cuadCategory: key,
+      }))
+
   return (
-    <div className="space-y-6">
+    <div className="p-6 max-w-6xl mx-auto space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+            <Sparkles className="w-5 h-5 text-primary" />
+          </div>
+          AI Clause Generator
+        </h1>
+        <p className="text-muted-foreground mt-2">
+          Generate contract-ready clauses based on CUAD dataset patterns, tailored to your risk context and jurisdiction.
+        </p>
+      </div>
 
-      <main className="pt-24 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-3 text-balance">AI Clause Generator</h1>
-          <p className="text-lg text-muted-foreground">
-            Generate legally sound contract clauses tailored to your specific needs
-          </p>
-        </div>
+      {/* Pre-fill banner */}
+      {prefillType && prefillRisk && (
+        <Card className="p-4 border-primary/30 bg-primary/5">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium">Generating clause for detected risk</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                <span className="font-medium">Type:</span> {prefillType.replace(/_/g, " ")} &middot;{" "}
+                <span className="font-medium">Risk:</span> {prefillRisk.slice(0, 100)}{prefillRisk.length > 100 ? "…" : ""}
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Clause Categories Sidebar */}
-          <div className="lg:col-span-1">
-            <Card className="modern-card p-6">
-              <h2 className="text-lg font-semibold mb-4">Clause Categories</h2>
-              <div className="space-y-2">
-                {clauseCategories.map((category) => (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Clause Type Selection */}
+        <div className="space-y-4">
+          <Card className="p-5">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+              CUAD Clause Types
+            </h2>
+            <div className="space-y-1 max-h-[480px] overflow-y-auto pr-1">
+              {categories.map((cat) => {
+                const Icon = CLAUSE_ICONS[cat.id] ?? FileCode
+                const isActive = selectedType === cat.id
+                return (
                   <button
-                    key={category.id}
-                    onClick={() => setSelectedCategory(category.id)}
-                    className={`w-full text-left p-3 rounded-lg transition-colors ${
-                      selectedCategory === category.id ? "bg-primary text-primary-foreground" : "hover:bg-accent"
+                    key={cat.id}
+                    onClick={() => setSelectedType(cat.id)}
+                    className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors text-sm ${
+                      isActive
+                        ? "bg-primary text-primary-foreground"
+                        : "hover:bg-accent text-foreground"
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <category.Icon className="w-5 h-5 shrink-0" />
-                        <div>
-                          <p className="font-medium text-sm">{category.name}</p>
-                          <p
-                            className={`text-xs mt-0.5 ${selectedCategory === category.id ? "text-primary-foreground/80" : "text-muted-foreground"}`}
-                          >
-                            {category.count} templates
-                          </p>
-                        </div>
-                      </div>
-                      <ChevronRight
-                        className={`w-4 h-4 ${selectedCategory === category.id ? "text-primary-foreground" : "text-muted-foreground"}`}
-                      />
+                    <div className="flex items-center gap-2.5">
+                      <Icon className="w-4 h-4 flex-shrink-0" />
+                      <span className="font-medium">{cat.name}</span>
+                      <ChevronRight className={`w-3.5 h-3.5 ml-auto ${isActive ? "text-primary-foreground" : "text-muted-foreground"}`} />
                     </div>
                   </button>
-                ))}
-              </div>
-            </Card>
+                )
+              })}
+            </div>
+          </Card>
 
-            {/* Quick Tips */}
-            <Card className="modern-card p-6 mt-6">
-              <h3 className="font-semibold mb-3 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-primary" />
-                Quick Tips
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5">•</span>
-                  <span>Always review generated clauses with legal counsel</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5">•</span>
-                  <span>Customize clauses to fit your specific jurisdiction</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5">•</span>
-                  <span>Consider industry-specific requirements</span>
-                </li>
-              </ul>
-            </Card>
-          </div>
-
-          {/* Main Content Area */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Template Selection */}
-            <Card className="modern-card p-6">
-              <h2 className="text-xl font-semibold mb-4">
-                {clauseCategories.find((c) => c.id === selectedCategory)?.name} Templates
-              </h2>
-              <div className="grid grid-cols-1 gap-4">
-                {(clauseTemplates[selectedCategory as keyof typeof clauseTemplates] || []).map((template, index) => (
-                  <div
-                    key={index}
-                    className="p-4 rounded-lg border border-border hover:border-primary/30 hover:bg-accent/20 transition-colors cursor-pointer"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <h3 className="font-semibold mb-1">{template.name}</h3>
-                        <p className="text-sm text-muted-foreground mb-3">{template.description}</p>
-                        <Badge variant="outline" className="text-xs">
-                          {template.jurisdiction}
-                        </Badge>
-                      </div>
-                      <Button size="sm" className="btn-primary" onClick={handleGenerate}>
-                        <Sparkles className="w-4 h-4 mr-2" />
-                        Generate
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            {/* Custom Generation */}
-            <Card className="modern-card p-6">
-              <h2 className="text-xl font-semibold mb-4">Custom Clause Generation</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Describe your requirements</label>
-                  <textarea
-                    className="w-full min-h-32 p-3 rounded-lg border border-input bg-background resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-                    placeholder="E.g., I need a confidentiality clause for a software development agreement that includes provisions for source code protection and a 3-year confidentiality period..."
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Jurisdiction</label>
-                    <select className="w-full p-3 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring">
-                      <option>United States</option>
-                      <option>European Union</option>
-                      <option>United Kingdom</option>
-                      <option>Canada</option>
-                      <option>Australia</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Industry</label>
-                    <select className="w-full p-3 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring">
-                      <option>Technology</option>
-                      <option>Healthcare</option>
-                      <option>Finance</option>
-                      <option>Manufacturing</option>
-                      <option>Retail</option>
-                    </select>
-                  </div>
-                </div>
-
-                <Button className="btn-primary w-full" onClick={handleGenerate}>
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Generate Custom Clause
-                </Button>
-              </div>
-            </Card>
-
-            {/* Generated Clause Output */}
-            {(generatedClause || isGenerating) && (
-              <Card className="modern-card p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-semibold flex items-center gap-2">
-                    <FileCode className="w-5 h-5" />
-                    Generated Clause
-                  </h2>
-                  {!isGenerating && (
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={handleCopy}>
-                        <Copy className="w-4 h-4 mr-2" />
-                        Copy
-                      </Button>
-                      <Button variant="outline" size="sm">
-                        <Download className="w-4 h-4 mr-2" />
-                        Download
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={handleGenerate}>
-                        <RefreshCw className="w-4 h-4 mr-2" />
-                        Regenerate
-                      </Button>
-                    </div>
-                  )}
-                </div>
-
-                {isGenerating ? (
-                  <div className="flex flex-col items-center justify-center py-12">
-                    <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
-                    <p className="text-muted-foreground">Generating your clause...</p>
-                  </div>
-                ) : (
-                  <div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 font-mono text-sm whitespace-pre-wrap leading-relaxed border border-border">
-                    {generatedClause}
-                  </div>
-                )}
-
-                {!isGenerating && (
-                  <div className="mt-4 p-4 rounded-lg bg-warning/10 border border-warning/20">
-                    <p className="text-sm text-warning-foreground">
-                      <strong>Legal Disclaimer:</strong> This clause is generated by AI and should be reviewed by
-                      qualified legal counsel before use. It may not be suitable for all situations or jurisdictions.
-                    </p>
-                  </div>
-                )}
-              </Card>
-            )}
-          </div>
+          {/* Tips */}
+          <Card className="p-5">
+            <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-primary" />
+              Tips
+            </h3>
+            <ul className="space-y-2 text-xs text-muted-foreground">
+              <li className="flex items-start gap-2">
+                <span className="text-primary mt-0.5">•</span>
+                <span>Clauses follow CUAD dataset patterns used in 510+ commercial contracts</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary mt-0.5">•</span>
+                <span>Always review generated clauses with legal counsel before use</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary mt-0.5">•</span>
+                <span>Specify jurisdiction for locally compliant language</span>
+              </li>
+            </ul>
+          </Card>
         </div>
-      </main>
+
+        {/* Generation Form + Output */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Input Form */}
+          <Card className="p-6 space-y-4">
+            <h2 className="text-lg font-semibold">
+              Generate {categories.find((c) => c.id === selectedType)?.name ?? selectedType.replace(/_/g, " ")} Clause
+            </h2>
+
+            <div>
+              <label className="block text-sm font-medium mb-1.5">
+                Risk / Missing Clause Description
+              </label>
+              <textarea
+                className="w-full min-h-[80px] p-3 rounded-lg border border-input bg-background resize-none focus:outline-none focus:ring-2 focus:ring-ring text-sm"
+                placeholder="E.g., No limitation of liability found — contract exposes to unlimited damages…"
+                value={riskDescription}
+                onChange={(e) => setRiskDescription(e.target.value)}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1.5">Jurisdiction</label>
+                <select
+                  className="w-full p-2.5 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring text-sm"
+                  value={jurisdiction}
+                  onChange={(e) => setJurisdiction(e.target.value)}
+                >
+                  {JURISDICTION_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1.5">Clause Type</label>
+                <select
+                  className="w-full p-2.5 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring text-sm"
+                  value={selectedType}
+                  onChange={(e) => setSelectedType(e.target.value)}
+                >
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1.5">
+                Contract Context <span className="text-muted-foreground font-normal">(optional)</span>
+              </label>
+              <textarea
+                className="w-full min-h-[60px] p-3 rounded-lg border border-input bg-background resize-none focus:outline-none focus:ring-2 focus:ring-ring text-sm"
+                placeholder="Any relevant contract details or summary to help tailor the clause…"
+                value={contractContext}
+                onChange={(e) => setContractContext(e.target.value)}
+              />
+            </div>
+
+            <Button
+              className="w-full"
+              onClick={handleGenerate}
+              disabled={isGenerating}
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Generating…
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Generate Clause
+                </>
+              )}
+            </Button>
+
+            {error && (
+              <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                {error}
+              </div>
+            )}
+          </Card>
+
+          {/* Generated Output */}
+          {generatedClause && (
+            <Card className="p-6 space-y-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-emerald-500" />
+                    {generatedClause.clause_title}
+                  </h2>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge variant="outline" className="text-xs">
+                      {generatedClause.cuad_category}
+                    </Badge>
+                    {generatedClause.jurisdiction && generatedClause.jurisdiction !== "general" && (
+                      <Badge variant="outline" className="text-xs">
+                        <Globe className="w-3 h-3 mr-1" />
+                        {generatedClause.jurisdiction}
+                      </Badge>
+                    )}
+                    {generatedClause.template_used && (
+                      <Badge variant="outline" className="text-xs text-emerald-600 dark:text-emerald-400">
+                        CUAD Template
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleCopy}>
+                    {copied ? (
+                      <><CheckCircle className="w-4 h-4 mr-1.5 text-emerald-500" /> Copied</>
+                    ) : (
+                      <><Copy className="w-4 h-4 mr-1.5" /> Copy</>
+                    )}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleGenerate} disabled={isGenerating}>
+                    <RefreshCw className={`w-4 h-4 mr-1.5 ${isGenerating ? "animate-spin" : ""}`} />
+                    Regenerate
+                  </Button>
+                </div>
+              </div>
+
+              {/* Clause Text */}
+              <div className="p-4 rounded-lg bg-muted/50 border border-border">
+                <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans">
+                  {generatedClause.clause_text}
+                </pre>
+              </div>
+
+              {/* Explanation */}
+              <div className="p-4 rounded-lg border border-primary/20 bg-primary/5">
+                <h3 className="text-sm font-semibold mb-1.5 flex items-center gap-2">
+                  <Lightbulb className="w-4 h-4 text-primary" />
+                  Why is this clause recommended?
+                </h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {generatedClause.explanation}
+                </p>
+              </div>
+            </Card>
+          )}
+        </div>
+      </div>
     </div>
+  )
+}
+
+export default function ClauseGeneratorPage() {
+  return (
+    <Suspense fallback={
+      <div className="p-6 max-w-6xl mx-auto">
+        <div className="flex items-center gap-3 text-muted-foreground animate-pulse mt-12">
+          <Clock className="w-5 h-5" />
+          <span>Loading…</span>
+        </div>
+      </div>
+    }>
+      <ClauseGeneratorContent />
+    </Suspense>
   )
 }

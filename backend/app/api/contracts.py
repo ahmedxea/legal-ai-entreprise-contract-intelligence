@@ -19,7 +19,6 @@ from app.services.storage_factory import storage as storage_service
 from app.services.sqlite_service import DatabaseService
 from app.services.document_processor import document_processor
 from app.services.auth_service import validate_session
-from app.services.storage_quota_service import storage_quota_service
 from app.core.config import settings
 from app.core.limiter import limiter
 from app.agents.orchestrator import ContractOrchestrator
@@ -34,7 +33,7 @@ db_service = DatabaseService()
 orchestrator = ContractOrchestrator()
 
 # Allowed file types and max size from config
-ALLOWED_EXTENSIONS = {".pdf", ".docx"}
+ALLOWED_EXTENSIONS = set(settings.supported_file_types_list)
 MAX_FILE_SIZE_BYTES = settings.MAX_FILE_SIZE_MB * 1024 * 1024
 
 
@@ -123,27 +122,6 @@ async def get_queue_status():
     }
 
 
-@router.get("/quota")
-async def get_user_quota(
-    authorization: Optional[str] = Header(None),
-):
-    """Return the current user's document count, storage usage, and quota limits."""
-    user_id = _get_user_id_from_token(authorization)
-    doc_count = await storage_quota_service.get_user_document_count(user_id)
-    storage_used = await storage_quota_service.get_user_storage_usage(user_id)
-    return {
-        "user_id": user_id,
-        "documents": {"used": doc_count, "limit": settings.MAX_DOCUMENTS_PER_USER},
-        "storage": {
-            "used_bytes": storage_used,
-            "used_mb": round(storage_used / (1024 * 1024), 2),
-            "limit_mb": settings.MAX_USER_STORAGE_MB,
-        },
-        "max_file_size_mb": settings.MAX_FILE_SIZE_MB,
-        "allowed_types": [".pdf", ".docx"],
-    }
-
-
 # ─── List (must be before /{contract_id} to avoid "/" being captured) ───
 
 @router.get("/", response_model=List[ContractListItem])
@@ -183,25 +161,28 @@ async def upload_contract(
     """
     Upload a contract document for analysis.
     Accepts PDF and DOCX files up to the configured size limit.
-    Enforces per-user document count and storage quotas.
+    Uses auth token to identify the user.
     """
     try:
         user_id = _get_user_id_from_token(authorization)
 
-        # Read file content first so we know the exact size
-        content = await file.read()
-
-        # Run all validations through the quota service
-        validation = await storage_quota_service.validate_upload(
-            user_id=user_id,
-            file_size=len(content),
-            filename=file.filename or "",
-            content_type=file.content_type,
-        )
-        if not validation.allowed:
-            raise HTTPException(status_code=400, detail=validation.error)
-
+        # Validate file type
         file_ext = os.path.splitext(file.filename or "")[1].lower()
+        if file_ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type: '{file_ext}'. Only {', '.join(ALLOWED_EXTENSIONS)} files are accepted."
+            )
+
+        # Read and validate file size
+        content = await file.read()
+        if len(content) == 0:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+        if len(content) > MAX_FILE_SIZE_BYTES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File size ({len(content) / (1024*1024):.1f} MB) exceeds the {settings.MAX_FILE_SIZE_MB} MB limit."
+            )
 
         # Store file
         logger.info(f"Uploading contract: {file.filename} for user: {user_id}")
@@ -569,8 +550,7 @@ async def delete_contract(
     authorization: Optional[str] = Header(None),
 ):
     """
-    Delete a contract and all associated data (analysis, chunks, text, blob).
-    Frees both document count and storage quota for the user.
+    Delete a contract
     """
     try:
         resolved_user_id = user_id or _get_user_id_from_token(authorization)
@@ -582,15 +562,14 @@ async def delete_contract(
         # Delete from blob storage
         await storage_service.delete_file(contract['blob_url'])
         
-        # Cascade-delete from all database tables
-        await db_service.delete_contract_cascade(contract_id)
+        # Delete from database
+        await db_service.delete_contract(contract_id)
         
         # Log audit event
         await db_service.create_audit_log(
             user_id=resolved_user_id,
             action="delete_contract",
-            contract_id=contract_id,
-            metadata={"filename": contract.get("filename"), "file_size": contract.get("file_size")}
+            contract_id=contract_id
         )
         
         return {"message": "Contract deleted successfully"}

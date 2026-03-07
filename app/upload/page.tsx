@@ -120,8 +120,8 @@ export default function UploadPage() {
         // Phase 2 → trigger AI analysis
         await apiClient.analyzeContract(contractId)
 
-        // Poll until analysis is done (up to ~5 min for large contracts)
-        await apiClient.pollContractStatus(contractId, ["analyzed"], 4000, 75)
+        // Poll until analysis is done (up to ~2 min)
+        await apiClient.pollContractStatus(contractId, ["analyzed"])
 
         setFiles((prev) =>
           prev.map((f) =>

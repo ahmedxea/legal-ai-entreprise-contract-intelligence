@@ -364,6 +364,16 @@ function ContractDetailContent() {
                               <span className="font-medium">Recommendation:</span> {risk.recommendation}
                             </p>
                           )}
+                          <div className="pt-1">
+                            <Link
+                              href={`/clauses?type=${encodeURIComponent(risk.risk_type ?? "")}&risk=${encodeURIComponent(risk.description)}&jurisdiction=${encodeURIComponent(governingLaw ?? "")}&context=${encodeURIComponent(analysis?.summary ?? "")}`}
+                            >
+                              <Button variant="outline" size="sm" className="h-7 text-xs">
+                                <Sparkles className="w-3 h-3 mr-1.5" />
+                                Generate Clause
+                              </Button>
+                            </Link>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -384,9 +394,15 @@ function ContractDetailContent() {
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {missingClauses.map((clause, i) => (
-                        <span key={i} className="px-3 py-1 text-xs rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 capitalize">
-                          {clause.replace(/_/g, " ")}
-                        </span>
+                        <Link
+                          key={i}
+                          href={`/clauses?type=${encodeURIComponent(clause)}&risk=${encodeURIComponent(`Missing ${clause.replace(/_/g, " ")} clause`)}&jurisdiction=${encodeURIComponent(governingLaw ?? "")}&context=${encodeURIComponent(analysis?.summary ?? "")}`}
+                        >
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 capitalize hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors cursor-pointer">
+                            {clause.replace(/_/g, " ")}
+                            <Sparkles className="w-3 h-3" />
+                          </span>
+                        </Link>
                       ))}
                     </div>
                   )}

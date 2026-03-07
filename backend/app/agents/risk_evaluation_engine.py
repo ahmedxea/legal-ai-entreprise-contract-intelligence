@@ -91,11 +91,11 @@ class RiskEvaluationEngine:
             self.rule_engine.evaluate_data_protection
         )
         
-        # Governing Law: dedicated evaluation
-        analysis.governing_law = self._evaluate_clause(
+        # For clauses without specific evaluation rules, apply generic logic
+        analysis.governing_law = self._evaluate_generic_clause(
             analysis.governing_law,
             ClauseType.GOVERNING_LAW,
-            self.rule_engine.evaluate_governing_law
+            importance="HIGH"
         )
         
         analysis.indemnification = self._evaluate_generic_clause(
@@ -356,15 +356,11 @@ class RiskEvaluationEngine:
         elif analysis.payment_terms.risk_level == RiskLevel.HIGH:
             risk_flags.append("⚠️ High-risk payment terms identified")
         
-        # 4. Governing law / jurisdiction
+        # 4. Governing law
         if not analysis.governing_law.present:
             risk_flags.append("⚠️ No governing law specified - legal jurisdiction unclear")
-        else:
-            jurisdiction_conf = extracted_data.get("jurisdiction_confidence", 0)
-            if not extracted_data.get("governing_law"):
-                risk_flags.append("⚠️ Governing law clause present but jurisdiction not identified")
-            elif jurisdiction_conf < 0.6:
-                risk_flags.append("⚠️ Governing law jurisdiction detected with low confidence - manual review recommended")
+        elif not extracted_data.get("governing_law"):
+            risk_flags.append("⚠️ Governing law clause present but jurisdiction not identified")
         
         # 5. Automatic renewal risks
         if analysis.termination.present and analysis.termination.text:
@@ -395,7 +391,7 @@ class RiskEvaluationEngine:
             if len(obligations) > 0:
                 parties = set()
                 for obl in obligations:
-                    if isinstance(obl, dict) and obl.get("party"):
+                    if obl.get("party"):
                         parties.add(obl["party"].lower())
                 if len(parties) == 1:
                     risk_flags.append("⚠️ One-sided contract - obligations only on one party")

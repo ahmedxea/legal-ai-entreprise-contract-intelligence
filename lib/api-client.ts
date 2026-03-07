@@ -52,6 +52,30 @@ export interface DashboardStats {
   compliance_score: number
 }
 
+export interface GenerateClauseRequest {
+  clause_type: string
+  risk_description?: string
+  jurisdiction?: string
+  contract_context?: string
+}
+
+export interface GeneratedClause {
+  clause_title: string
+  clause_text: string
+  explanation: string
+  clause_type: string
+  jurisdiction: string
+  template_used: boolean
+  cuad_category: string
+}
+
+export interface CuadTemplate {
+  clause_type: string
+  title: string
+  cuad_category: string
+  placeholders: string[]
+}
+
 class APIClient {
   private baseURL: string
   private _token: string | null = null
@@ -210,6 +234,27 @@ class APIClient {
       headers: this.authHeaders,
     })
     if (!response.ok) throw new Error("Failed to fetch dashboard stats")
+    return response.json()
+  }
+
+  async generateClause(request: GenerateClauseRequest): Promise<GeneratedClause> {
+    const response = await fetch(`${this.baseURL}/api/clauses/generate-for-risk`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...this.authHeaders },
+      body: JSON.stringify(request),
+    })
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({ detail: "Generation failed" }))
+      throw new Error(body.detail || `Clause generation failed (${response.status})`)
+    }
+    return response.json()
+  }
+
+  async getCuadTemplates(): Promise<CuadTemplate[]> {
+    const response = await fetch(`${this.baseURL}/api/clauses/cuad-templates`, {
+      headers: this.authHeaders,
+    })
+    if (!response.ok) throw new Error("Failed to fetch CUAD templates")
     return response.json()
   }
 }
