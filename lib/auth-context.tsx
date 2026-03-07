@@ -1,78 +1,178 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { config } from "./config"
+import { apiClient } from "./api-client"
+
+const API_URL = config.apiUrl
 
 interface User {
   id: string
   email: string
   name: string
+  full_name?: string
+  organization?: string
+  role?: string
 }
 
 interface AuthContextType {
   user: User | null
-  signIn: (email: string, password: string) => Promise<boolean>
-  signUp: (email: string, password: string, name: string) => Promise<boolean>
+  token: string | null
+  signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
+  signUp: (email: string, password: string, name: string, organization?: string) => Promise<{ success: boolean; error?: string }>
   signOut: () => void
   isLoading: boolean
+  isAuthenticated: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [token, setToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
+  // Keep the apiClient singleton in sync with the current auth token
   useEffect(() => {
-    // Check if user is logged in on mount
-    const storedUser = localStorage.getItem("user")
-    if (storedUser) {
-      setUser(JSON.parse(storedUser))
+    apiClient.setToken(token)
+  }, [token])
+  useEffect(() => {
+    const savedToken = localStorage.getItem("lexra_token")
+    const savedUser = localStorage.getItem("lexra_user")
+
+    if (savedToken && savedUser) {
+      setToken(savedToken)
+      setUser(JSON.parse(savedUser))
+
+      // Validate token with backend
+      fetch(`${API_URL}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${savedToken}` },
+      })
+        .then((res) => {
+          if (!res.ok) {
+            // Token expired — clear session
+            localStorage.removeItem("lexra_token")
+            localStorage.removeItem("lexra_user")
+            setToken(null)
+            setUser(null)
+          }
+        })
+        .catch(() => {
+          // Backend unreachable — keep local session for now
+        })
+        .finally(() => setIsLoading(false))
+    } else {
+      setIsLoading(false)
     }
-    setIsLoading(false)
   }, [])
 
-  const signIn = async (email: string, password: string): Promise<boolean> => {
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 500))
+  const signIn = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch(`${API_URL}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      })
 
-    // Simple validation (in production, this would be a real API call)
-    if (email && password.length >= 6) {
-      const user = {
-        id: Math.random().toString(36).substr(2, 9),
-        email,
-        name: email.split("@")[0],
+      if (!res.ok) {
+        const data = await res.json()
+        return { success: false, error: data.detail || "Invalid email or password" }
       }
-      setUser(user)
-      localStorage.setItem("user", JSON.stringify(user))
-      return true
+
+      const data = await res.json()
+      const userData: User = {
+        id: data.user.id,
+        email: data.user.email,
+        name: data.user.full_name || data.user.name || email.split("@")[0],
+        full_name: data.user.full_name,
+        organization: data.user.organization,
+        role: data.user.role,
+      }
+
+      setToken(data.token)
+      setUser(userData)
+      localStorage.setItem("lexra_token", data.token)
+      localStorage.setItem("lexra_user", JSON.stringify(userData))
+
+      return { success: true }
+    } catch {
+      return { success: false, error: "Unable to connect to server" }
     }
-    return false
   }
 
-  const signUp = async (email: string, password: string, name: string): Promise<boolean> => {
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 500))
+  const signUp = async (
+    email: string,
+    password: string,
+    name: string,
+    organization?: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch(`${API_URL}/api/auth/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+          full_name: name,
+          organization: organization || "",
+        }),
+      })
 
-    // Simple validation (in production, this would be a real API call)
-    if (email && password.length >= 6 && name) {
-      const user = {
-        id: Math.random().toString(36).substr(2, 9),
-        email,
-        name,
+      if (!res.ok) {
+        const data = await res.json()
+        return { success: false, error: data.detail || "Sign up failed" }
       }
-      setUser(user)
-      localStorage.setItem("user", JSON.stringify(user))
-      return true
+
+      const data = await res.json()
+      const userData: User = {
+        id: data.user.id,
+        email: data.user.email,
+        name: data.user.full_name || data.user.name || name,
+        full_name: data.user.full_name,
+        organization: data.user.organization,
+        role: data.user.role,
+      }
+
+      setToken(data.token)
+      setUser(userData)
+      localStorage.setItem("lexra_token", data.token)
+      localStorage.setItem("lexra_user", JSON.stringify(userData))
+
+      return { success: true }
+    } catch {
+      return { success: false, error: "Unable to connect to server" }
     }
-    return false
   }
 
   const signOut = () => {
+    if (token) {
+      fetch(`${API_URL}/api/auth/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {})
+    }
+
+    setToken(null)
     setUser(null)
-    localStorage.removeItem("user")
+    localStorage.removeItem("lexra_token")
+    localStorage.removeItem("lexra_user")
   }
 
-  return <AuthContext.Provider value={{ user, signIn, signUp, signOut, isLoading }}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        signIn,
+        signUp,
+        signOut,
+        isLoading,
+        isAuthenticated: !!user && !!token,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export function useAuth() {

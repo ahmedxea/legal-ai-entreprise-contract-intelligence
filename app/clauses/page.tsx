@@ -1,10 +1,10 @@
 "use client"
 
-import { Navigation } from "@/components/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { FileCode, Sparkles, Copy, Download, RefreshCw, ChevronRight } from "lucide-react"
+import { FileCode, Sparkles, Copy, Download, RefreshCw, ChevronRight, Lock, ClipboardList, Scale, Banknote, Lightbulb, Users } from "lucide-react"
+import { type LucideIcon } from "lucide-react"
 import { useState } from "react"
 
 export default function ClauseGeneratorPage() {
@@ -12,13 +12,13 @@ export default function ClauseGeneratorPage() {
   const [generatedClause, setGeneratedClause] = useState<string>("")
   const [isGenerating, setIsGenerating] = useState(false)
 
-  const clauseCategories = [
-    { id: "confidentiality", name: "Confidentiality", icon: "🔒", count: 12 },
-    { id: "termination", name: "Termination", icon: "📋", count: 8 },
-    { id: "liability", name: "Liability & Indemnity", icon: "⚖️", count: 10 },
-    { id: "payment", name: "Payment Terms", icon: "💰", count: 6 },
-    { id: "ip", name: "Intellectual Property", icon: "💡", count: 9 },
-    { id: "dispute", name: "Dispute Resolution", icon: "🤝", count: 7 },
+  const clauseCategories: { id: string; name: string; Icon: LucideIcon; count: number }[] = [
+    { id: "confidentiality", name: "Confidentiality", Icon: Lock, count: 12 },
+    { id: "termination", name: "Termination", Icon: ClipboardList, count: 8 },
+    { id: "liability", name: "Liability & Indemnity", Icon: Scale, count: 10 },
+    { id: "payment", name: "Payment Terms", Icon: Banknote, count: 6 },
+    { id: "ip", name: "Intellectual Property", Icon: Lightbulb, count: 9 },
+    { id: "dispute", name: "Dispute Resolution", Icon: Users, count: 7 },
   ]
 
   const clauseTemplates = {
@@ -91,8 +91,7 @@ export default function ClauseGeneratorPage() {
   }
 
   return (
-    <div className="min-h-screen">
-      <Navigation />
+    <div className="space-y-6">
 
       <main className="pt-24 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         <div className="mb-8">
@@ -105,7 +104,7 @@ export default function ClauseGeneratorPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Clause Categories Sidebar */}
           <div className="lg:col-span-1">
-            <Card className="p-6">
+            <Card className="modern-card p-6">
               <h2 className="text-lg font-semibold mb-4">Clause Categories</h2>
               <div className="space-y-2">
                 {clauseCategories.map((category) => (
@@ -113,12 +112,12 @@ export default function ClauseGeneratorPage() {
                     key={category.id}
                     onClick={() => setSelectedCategory(category.id)}
                     className={`w-full text-left p-3 rounded-lg transition-colors ${
-                      selectedCategory === category.id ? "bg-primary text-primary-foreground" : "hover:bg-secondary"
+                      selectedCategory === category.id ? "bg-primary text-primary-foreground" : "hover:bg-accent"
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <span className="text-xl">{category.icon}</span>
+                        <category.Icon className="w-5 h-5 shrink-0" />
                         <div>
                           <p className="font-medium text-sm">{category.name}</p>
                           <p
@@ -138,7 +137,7 @@ export default function ClauseGeneratorPage() {
             </Card>
 
             {/* Quick Tips */}
-            <Card className="p-6 mt-6">
+            <Card className="modern-card p-6 mt-6">
               <h3 className="font-semibold mb-3 flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-primary" />
                 Quick Tips
@@ -163,7 +162,7 @@ export default function ClauseGeneratorPage() {
           {/* Main Content Area */}
           <div className="lg:col-span-2 space-y-6">
             {/* Template Selection */}
-            <Card className="p-6">
+            <Card className="modern-card p-6">
               <h2 className="text-xl font-semibold mb-4">
                 {clauseCategories.find((c) => c.id === selectedCategory)?.name} Templates
               </h2>
@@ -171,7 +170,7 @@ export default function ClauseGeneratorPage() {
                 {(clauseTemplates[selectedCategory as keyof typeof clauseTemplates] || []).map((template, index) => (
                   <div
                     key={index}
-                    className="p-4 rounded-lg border border-border hover:border-primary/50 transition-colors cursor-pointer"
+                    className="p-4 rounded-lg border border-border hover:border-primary/30 hover:bg-accent/20 transition-colors cursor-pointer"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
@@ -181,7 +180,7 @@ export default function ClauseGeneratorPage() {
                           {template.jurisdiction}
                         </Badge>
                       </div>
-                      <Button size="sm" className="gradient-blue text-white hover:opacity-90" onClick={handleGenerate}>
+                      <Button size="sm" className="btn-primary" onClick={handleGenerate}>
                         <Sparkles className="w-4 h-4 mr-2" />
                         Generate
                       </Button>
@@ -192,7 +191,7 @@ export default function ClauseGeneratorPage() {
             </Card>
 
             {/* Custom Generation */}
-            <Card className="p-6">
+            <Card className="modern-card p-6">
               <h2 className="text-xl font-semibold mb-4">Custom Clause Generation</h2>
               <div className="space-y-4">
                 <div>
@@ -227,7 +226,7 @@ export default function ClauseGeneratorPage() {
                   </div>
                 </div>
 
-                <Button className="gradient-blue text-white hover:opacity-90 w-full" onClick={handleGenerate}>
+                <Button className="btn-primary w-full" onClick={handleGenerate}>
                   <Sparkles className="w-4 h-4 mr-2" />
                   Generate Custom Clause
                 </Button>
@@ -236,7 +235,7 @@ export default function ClauseGeneratorPage() {
 
             {/* Generated Clause Output */}
             {(generatedClause || isGenerating) && (
-              <Card className="p-6">
+              <Card className="modern-card p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-semibold flex items-center gap-2">
                     <FileCode className="w-5 h-5" />
@@ -262,11 +261,11 @@ export default function ClauseGeneratorPage() {
 
                 {isGenerating ? (
                   <div className="flex flex-col items-center justify-center py-12">
-                    <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+                    <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
                     <p className="text-muted-foreground">Generating your clause...</p>
                   </div>
                 ) : (
-                  <div className="p-4 rounded-lg bg-secondary/50 font-mono text-sm whitespace-pre-wrap leading-relaxed">
+                  <div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 font-mono text-sm whitespace-pre-wrap leading-relaxed border border-border">
                     {generatedClause}
                   </div>
                 )}

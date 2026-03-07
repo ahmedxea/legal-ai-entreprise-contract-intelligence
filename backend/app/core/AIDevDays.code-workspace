@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"name": "AIDevDays",
+			"path": "../../.."
+		}
+	],
+	"settings": {
+		"python-envs.defaultEnvManager": "ms-python.python:venv"
+	}
+}

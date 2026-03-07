@@ -1,0 +1,113 @@
+"""
+Lexra Engine - Backend API
+Enterprise AI contract intelligence platform
+"""
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
+import logging
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+
+from app.api import contracts, analysis, clauses, auth, cuad_analysis
+from app.core.config import settings
+from app.core.logging_config import setup_logging
+from app.core.limiter import limiter
+from app.services.auth_service import init_auth_tables
+
+# Setup logging
+setup_logging()
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown events"""
+    logger.info("Starting CLM API Server...")
+    logger.info(f"Environment: {settings.ENVIRONMENT}")
+    # Initialize auth tables (creates demo user if needed)
+    try:
+        init_auth_tables()
+        logger.info("Auth tables initialized")
+    except Exception as e:
+        logger.error(f"Auth table init failed (non-fatal): {e}")
+    yield
+    logger.info("Shutting down CLM API Server...")
+
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="Lexra API",
+    description="Enterprise contract intelligence engine with AI-powered extraction, risk analysis, and document understanding",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# Attach rate limiter state and exception handler
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
+# Configure CORS for Next.js frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Setup OpenTelemetry tracing (no-op in dev when OTEL_EXPORTER_OTLP_ENDPOINT is unset)
+from app.core.tracing import setup_tracing
+setup_tracing(app)
+
+
+# Health check endpoint
+@app.get("/")
+async def root():
+    return {
+        "message": "CLM API is running",
+        "version": "1.0.0",
+        "status": "healthy"
+    }
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for monitoring"""
+    return {
+        "status": "healthy",
+        "environment": settings.ENVIRONMENT,
+        "azure_configured": bool(settings.AZURE_OPENAI_ENDPOINT)
+    }
+
+
+# Include routers
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(contracts.router, prefix="/api/contracts", tags=["Contracts"])
+app.include_router(analysis.router, prefix="/api/analysis", tags=["Analysis"])
+app.include_router(clauses.router, prefix="/api/clauses", tags=["Clauses"])
+app.include_router(cuad_analysis.router, prefix="/api/contracts", tags=["CUAD Analysis"])
+
+
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error occurred"}
+    )
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        log_level="info"
+    )

@@ -8,7 +8,6 @@ import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { motion } from "framer-motion"
 import { ArrowLeft } from "lucide-react"
 
 export default function LoginPage() {
@@ -27,22 +26,22 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      let success = false
+      let result: { success: boolean; error?: string }
       if (isSignUp) {
         if (!name) {
           setError("Please enter your name")
           setIsLoading(false)
           return
         }
-        success = await signUp(email, password, name)
+        result = await signUp(email, password, name)
       } else {
-        success = await signIn(email, password)
+        result = await signIn(email, password)
       }
 
-      if (success) {
-        router.push("/upload")
+      if (result.success) {
+        router.push("/home")
       } else {
-        setError(isSignUp ? "Sign up failed. Please try again." : "Invalid email or password")
+        setError(result.error || (isSignUp ? "Sign up failed. Please try again." : "Invalid email or password"))
       }
     } catch (err) {
       setError("An error occurred. Please try again.")
@@ -53,15 +52,10 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#020B1B] to-[#0A1F44] flex items-center justify-center px-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-md"
-      >
+      <div className="w-full max-w-md">
         {/* Back Button */}
         <button
-          onClick={() => router.push("/")}
+          onClick={() => router.push("/home")}
           className="flex items-center gap-2 text-[#00E0FF] hover:text-[#00C6FF] transition-colors mb-8"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -74,7 +68,7 @@ export default function LoginPage() {
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-white mb-2">{isSignUp ? "Create Account" : "Welcome Back"}</h1>
             <p className="text-[#9CA3AF]">
-              {isSignUp ? "Sign up to get started with Quill" : "Sign in to continue to Quill"}
+              {isSignUp ? "Sign up to get started with Lexra" : "Sign in to continue to Lexra"}
             </p>
           </div>
 
@@ -146,6 +140,38 @@ export default function LoginPage() {
             >
               {isLoading ? "Loading..." : isSignUp ? "Sign Up" : "Sign In"}
             </Button>
+
+            {!isSignUp && (
+              <>
+                <div className="relative my-2">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-[#00E0FF]/10" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-[#0A1F44]/70 px-3 text-[#6B7280]">or</span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsLoading(true)
+                    setError("")
+                    const result = await signIn("demo@lexra.ai", "demo123")
+                    if (result.success) {
+                      router.push("/home")
+                    } else {
+                      setError(result.error || "Demo login failed")
+                    }
+                    setIsLoading(false)
+                  }}
+                  disabled={isLoading}
+                  className="w-full rounded-xl border border-[#00E0FF]/20 text-[#00E0FF] py-3 hover:bg-[#00E0FF]/5 transition-all text-sm font-medium disabled:opacity-50"
+                >
+                  Try Demo Account
+                </button>
+              </>
+            )}
           </form>
 
           {/* Toggle Sign Up/Sign In */}
@@ -165,7 +191,7 @@ export default function LoginPage() {
             </p>
           </div>
         </div>
-      </motion.div>
+      </div>
     </div>
   )
 }

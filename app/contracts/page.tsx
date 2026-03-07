@@ -1,129 +1,270 @@
 "use client"
 
-import { Navigation } from "@/components/navigation"
-import { ContractCard } from "@/components/contract-card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, Upload } from "lucide-react"
-import { useState } from "react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Search, Upload, FileText, Calendar, AlertTriangle, CheckCircle, Filter, Trash2, Loader2, Scale } from "lucide-react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
+import { apiClient, type Contract } from "@/lib/api-client"
+
+function getUploadDate(contract: Contract) {
+  return contract.uploaded_at ?? contract.upload_date ?? new Date().toISOString()
+}
+
+function getGoverningLaw(contract: Contract) {
+  return contract.extracted_data?.governing_law || contract.analysis?.entities?.governing_law || contract.analysis?.extracted_data?.governing_law || "Unclassified"
+}
 
 export default function ContractsPage() {
   const [searchQuery, setSearchQuery] = useState("")
-  const [contracts, setContracts] = useState([
-    {
-      id: 1,
-      name: "Service Agreement 2025.pdf",
-      type: "Service Agreement",
-      fileUrl: "https://example.com/contracts/service-agreement-2025.pdf",
-      status: "Active",
-      riskLevel: "Low" as const,
-      value: "$250,000",
-      duration: "12 months",
-      parties: ["Acme Corp", "Tech Solutions Inc"],
-      startDate: "2025-01-01",
-      endDate: "2026-01-01",
-    },
-    {
-      id: 2,
-      name: "NDA - Tech Corp.docx",
-      type: "Non-Disclosure Agreement",
-      fileUrl: "https://example.com/contracts/nda-tech-corp.pdf",
-      status: "Processing",
-      riskLevel: "Medium" as const,
-      value: "$0",
-      duration: "24 months",
-      parties: ["Your Company", "Tech Corp"],
-      startDate: "2025-01-14",
-      endDate: "2027-01-14",
-    },
-    {
-      id: 3,
-      name: "Employment Contract.pdf",
-      type: "Employment Agreement",
-      fileUrl: "https://example.com/contracts/employment-contract.pdf",
-      status: "Completed",
-      riskLevel: "Low" as const,
-      value: "$120,000/year",
-      duration: "Indefinite",
-      parties: ["Your Company", "John Doe"],
-      startDate: "2025-01-01",
-      endDate: "Ongoing",
-    },
-    {
-      id: 4,
-      name: "Vendor Agreement.pdf",
-      type: "Vendor Agreement",
-      fileUrl: "https://example.com/contracts/vendor-agreement.pdf",
-      status: "Under Review",
-      riskLevel: "High" as const,
-      value: "$500,000",
-      duration: "36 months",
-      parties: ["Your Company", "Global Vendors Inc"],
-      startDate: "2025-02-01",
-      endDate: "2028-02-01",
-    },
-  ])
+  const [contracts, setContracts] = useState<Contract[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filterStatus, setFilterStatus] = useState<string>("all")
+  const [deleteTarget, setDeleteTarget] = useState<Contract | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
-  const handleRename = (contract: any, newName: string) => {
-    console.log("[v0] Renaming contract:", contract.id, "to:", newName)
-    setContracts((prev) => prev.map((c) => (c.id === contract.id ? { ...c, name: newName } : c)))
-    // TODO: Add API call to update contract name on server
+  useEffect(() => {
+    fetchContracts()
+  }, [])
+
+  const fetchContracts = async () => {
+    try {
+      setLoading(true)
+      const data = await apiClient.getContracts()
+      setContracts(data)
+    } catch (error) {
+      console.error("Failed to fetch contracts:", error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleDelete = (id: string | number) => {
-    console.log("[v0] Deleting contract:", id)
-    setContracts((prev) => prev.filter((c) => c.id !== id))
-    // TODO: Add API call to delete contract from server
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    try {
+      setDeleting(true)
+      await apiClient.deleteContract(deleteTarget.id)
+      setContracts((prev) => prev.filter((c) => c.id !== deleteTarget.id))
+      setDeleteTarget(null)
+    } catch (err: any) {
+      console.error("Delete failed:", err)
+    } finally {
+      setDeleting(false)
+    }
   }
 
-  const filteredContracts = contracts.filter((contract) =>
-    contract.name.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
+  const filteredContracts = contracts.filter((contract) => {
+    const matchesSearch = (contract.filename ?? "").toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesFilter = filterStatus === "all" || contract.status.toLowerCase() === filterStatus.toLowerCase()
+    return matchesSearch && matchesFilter
+  })
+
+  const getStatusBadge = (status: string) => {
+    const statusLower = status.toLowerCase()
+    if (statusLower === "completed" || statusLower === "analyzed") {
+      return <span className="badge-success">Analyzed</span>
+    } else if (statusLower === "processing" || statusLower === "pending") {
+      return <span className="badge-warning">Processing</span>
+    } else {
+      return <span className="badge-danger">Failed</span>
+    }
+  }
+
+  const getRiskBadge = (riskScore?: number) => {
+    if (!riskScore) return <span className="text-sm text-muted-foreground">N/A</span>
+    if (riskScore < 3) return <span className="text-sm text-success flex items-center gap-1"><CheckCircle className="w-3 h-3" />Low</span>
+    if (riskScore < 7) return <span className="text-sm text-warning flex items-center gap-1"><AlertTriangle className="w-3 h-3" />Medium</span>
+    return <span className="text-sm text-danger flex items-center gap-1"><AlertTriangle className="w-3 h-3" />High</span>
+  }
 
   return (
-    <div className="min-h-screen">
-      <Navigation />
-
-      <main className="pt-24 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-3 text-balance">All Contracts</h1>
-          <p className="text-lg text-muted-foreground">Manage and view all your contract documents</p>
-        </div>
-
-        {/* Search and Actions */}
-        <div className="flex flex-col sm:flex-row items-center gap-4 mb-8">
-          <div className="relative flex-1 w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search contracts..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
+    <div className="p-6 max-w-screen-2xl mx-auto">
+      {/* Header */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">All Contracts</h1>
+            <p className="text-muted-foreground mt-1">Review jurisdiction, processing status, and risk exposure across your contract portfolio</p>
           </div>
-          <Link href="/upload">
-            <Button className="gradient-blue text-white hover:opacity-90 w-full sm:w-auto">
+          <Link href="/home">
+            <Button className="btn-enterprise">
               <Upload className="w-4 h-4 mr-2" />
-              Upload New Contract
+              Upload Contract
             </Button>
           </Link>
         </div>
+      </div>
 
-        {/* Contracts Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredContracts.map((contract) => (
-            <ContractCard key={contract.id} contract={contract} onRename={handleRename} onDelete={handleDelete} />
-          ))}
-        </div>
-
-        {filteredContracts.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">No contracts found matching your search.</p>
+      {/* Filters and Search */}
+      <div className="enterprise-card mb-6">
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+          <div className="relative flex-1 w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search contracts by name..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 input-enterprise"
+            />
           </div>
-        )}
-      </main>
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-muted-foreground" />
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="input-enterprise w-40"
+            >
+              <option value="all">All Status</option>
+              <option value="completed">Analyzed</option>
+              <option value="processing">Processing</option>
+              <option value="failed">Failed</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading contracts...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Contracts Table */}
+      {!loading && filteredContracts.length > 0 && (
+        <div className="enterprise-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">Document</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">Type</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">Governing Law</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">Upload Date</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">Status</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">Risk Level</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredContracts.map((contract) => (
+                  <tr key={contract.id} className="border-b border-border hover:bg-muted/50 transition-colors">
+                    <td className="py-4 px-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <FileText className="w-5 h-5 text-primary" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium text-foreground truncate">{contract.filename}</p>
+                          <p className="text-sm text-muted-foreground">{contract.filename.split('.').pop()?.toUpperCase() || 'FILE'}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="text-sm text-foreground">{contract.industry || "General"}</span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+                        <Scale className="w-3 h-3" />
+                        {getGoverningLaw(contract)}
+                      </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="w-4 h-4" />
+                        {new Date(getUploadDate(contract)).toLocaleDateString()}
+                      </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      {getStatusBadge(contract.status)}
+                    </td>
+                    <td className="py-4 px-4">
+                      {getRiskBadge(contract.analysis?.overall_risk_score)}
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="flex items-center gap-2">
+                        <Link href={`/contracts/detail?id=${contract.id}`}>
+                          <Button variant="outline" size="sm" className="text-xs">
+                            View Details
+                          </Button>
+                        </Link>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => setDeleteTarget(contract)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && filteredContracts.length === 0 && (
+        <div className="enterprise-card text-center py-16">
+          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+            <FileText className="w-8 h-8 text-muted-foreground" />
+          </div>
+          <h3 className="text-lg font-semibold text-foreground mb-2">No contracts found</h3>
+          <p className="text-muted-foreground mb-6">
+            {searchQuery ? "Try adjusting your search terms" : "Upload your first contract to get started"}
+          </p>
+          <Link href="/home">
+            <Button className="btn-enterprise">
+              <Upload className="w-4 h-4 mr-2" />
+              Upload Contract
+            </Button>
+          </Link>
+        </div>
+      )}
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete contract?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong>{deleteTarget?.filename}</strong> and all its
+              analysis data. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? (
+                <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />Deleting…</>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
