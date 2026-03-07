@@ -36,9 +36,9 @@ class CUADClauseExtractionAgent:
     Risk evaluation is performed separately by RiskEvaluationEngine.
     """
     
-    def __init__(self):
+    def __init__(self, ai_service=None):
         """Initialize the clause extraction agent"""
-        self.ai_service = ollama_service
+        self.ai_service = ai_service or ollama_service
     
     async def extract_clauses(
         self,

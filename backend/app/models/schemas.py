@@ -169,13 +169,13 @@ class ContractDetail(BaseModel):
     upload_date: datetime
     status: ContractStatus
     language: Language
-    industry: Optional[Industry] = None
-    governing_law: Optional[GoverningLaw] = None
+    industry: Optional[str] = None
+    governing_law: Optional[str] = None
     file_size: Optional[int] = None
     file_type: Optional[str] = None
     page_count: Optional[int] = None
-    extracted_data: Optional[ExtractedData] = None
-    analysis: Optional[ContractAnalysis] = None
+    extracted_data: Optional[Dict[str, Any]] = None
+    analysis: Optional[Dict[str, Any]] = None
     blob_url: Optional[str] = None
 
 

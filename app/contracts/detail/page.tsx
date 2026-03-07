@@ -458,6 +458,26 @@ function ContractDetailContent() {
                           <dd className="text-sm">{entities.contract_value}</dd>
                         </div>
                       )}
+                      {entities.financial_terms && Array.isArray(entities.financial_terms) && entities.financial_terms.length > 0 && (
+                        <div>
+                          <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Financial Terms</dt>
+                          <dd className="space-y-1">
+                            {entities.financial_terms.map((term: string, i: number) => (
+                              <p key={i} className="text-sm">{term}</p>
+                            ))}
+                          </dd>
+                        </div>
+                      )}
+                      {entities.obligations && Array.isArray(entities.obligations) && entities.obligations.length > 0 && (
+                        <div>
+                          <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Key Obligations</dt>
+                          <dd className="space-y-1">
+                            {entities.obligations.map((ob: string, i: number) => (
+                              <p key={i} className="text-sm">{ob}</p>
+                            ))}
+                          </dd>
+                        </div>
+                      )}
                     </dl>
                   </Card>
                 )}

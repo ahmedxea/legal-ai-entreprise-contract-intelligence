@@ -80,7 +80,13 @@ class LocalStorageService:
             File content as bytes
         """
         try:
-            path = Path(file_path)
+            path = Path(file_path).resolve()
+            storage_root = self.storage_path.resolve()
+            
+            # Security: ensure file is within storage directory (prevent path traversal)
+            if not str(path).startswith(str(storage_root)):
+                logger.error(f"Path traversal attempt blocked: {file_path}")
+                raise PermissionError(f"Access denied: file outside storage directory")
             
             if not path.exists():
                 raise FileNotFoundError(f"File not found: {file_path}")

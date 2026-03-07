@@ -121,23 +121,28 @@ class CUADAnalysisService:
         await self._db.update_contract_status(contract_id, ContractStatus.PROCESSING)
         
         try:
-            # ── Step 1: Extract basic entities (parties, dates, etc.) ──────────
-            logger.info(f"[CUAD] Step 1: Extracting entities for {contract_id}")
-            extracted_data = await self._entity_extractor.extract_data(
-                contract_text=contract_text,
-                language=language
-            )
-            
-            # ── Step 2: Extract CUAD clauses using LLM ─────────────────────────
-            logger.info(f"[CUAD] Step 2: Extracting clauses for {contract_id}")
+            # ── Step 1: Extract CUAD clauses using LLM (CUAD-based) ────────────
+            logger.info(f"[CUAD] Step 1: Extracting CUAD clauses for {contract_id}")
             clause_analysis = await self._clause_extractor.extract_clauses(
                 contract_id=contract_id,
                 contract_text=contract_text,
                 language=language
             )
             
-            # ── Step 3: Evaluate risks using rule engine ───────────────────────
-            logger.info(f"[CUAD] Step 3: Evaluating risks for {contract_id}")
+            # ── Step 2: Extract additional entities (LLM-based) ────────────────
+            logger.info(f"[CUAD] Step 2: Extracting supplementary entities for {contract_id}")
+            extracted_data = await self._entity_extractor.extract_data(
+                contract_text=contract_text,
+                language=language
+            )
+            
+            # ── Step 2.5: Merge CUAD clause data with entity data ──────────────
+            # CUAD clauses take priority over entity extraction for overlapping fields
+            extracted_data = self._merge_cuad_with_entities(clause_analysis, extracted_data)
+            logger.info(f"[CUAD] Merged CUAD clauses with entity data for {contract_id}")
+            
+            # ── Step 3: Evaluate risks using rule engine (Rule-based) ──────────
+            logger.info(f"[CUAD] Step 3: Evaluating risks with deterministic rules for {contract_id}")
             clause_analysis = self._risk_evaluator.evaluate_contract_risk(clause_analysis)
             
             # ── Step 4: Generate risk summary ──────────────────────────────────
@@ -234,6 +239,151 @@ class CUADAnalysisService:
         except Exception as e:
             logger.error(f"[CUAD] Error persisting results for {contract_id}: {e}", exc_info=True)
             # Don't raise - we want to return results even if persistence fails
+    
+    def _merge_cuad_with_entities(
+        self,
+        clause_analysis: ContractAnalysisSchema,
+        extracted_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Merge CUAD clause-extracted data with LLM entity extraction
+        
+        CUAD clause data takes priority for overlapping fields:
+        - Governing Law (from CUAD governing_law clause)
+        - Parties (from CUAD contract_parties)
+        - Dates (from CUAD effective_date, expiration_date)
+        
+        This ensures CUAD-extracted legal entities are authoritative
+        while preserving additional context from LLM extraction.
+        
+        Args:
+            clause_analysis: CUAD clause extraction results
+            extracted_data: LLM entity extraction results
+            
+        Returns:
+            Merged entity data with CUAD taking priority
+        """
+        merged = extracted_data.copy()
+        
+        # Governing Law: CUAD clause takes priority
+        if clause_analysis.governing_law.present and clause_analysis.governing_law.text:
+            jurisdiction, confidence = self._extract_jurisdiction(
+                clause_analysis.governing_law.text
+            )
+            if jurisdiction:
+                merged["governing_law"] = jurisdiction
+                merged["jurisdiction_confidence"] = confidence
+                merged["jurisdiction_source"] = "cuad_clause"
+            elif extracted_data.get("governing_law"):
+                # LLM entity extraction fallback
+                merged["jurisdiction_confidence"] = 0.7
+                merged["jurisdiction_source"] = "llm_entity"
+            else:
+                # Clause present but jurisdiction not parseable
+                merged["governing_law"] = clause_analysis.governing_law.text[:120].strip()
+                merged["jurisdiction_confidence"] = 0.4
+                merged["jurisdiction_source"] = "clause_text_fallback"
+            logger.debug(f"[CUAD] Governing law: {merged.get('governing_law')} (confidence={merged.get('jurisdiction_confidence')})")
+        elif extracted_data.get("governing_law"):
+            merged["jurisdiction_confidence"] = 0.7
+            merged["jurisdiction_source"] = "llm_entity"
+        
+        # Parties: CUAD contract_parties takes priority if present
+        if clause_analysis.contract_parties:
+            merged["parties"] = clause_analysis.contract_parties
+            logger.debug(f"[CUAD] Using CUAD-extracted parties: {len(clause_analysis.contract_parties)} parties")
+        
+        # Effective Date: CUAD takes priority
+        if clause_analysis.effective_date:
+            merged["effective_date"] = clause_analysis.effective_date
+            logger.debug(f"[CUAD] Using CUAD-extracted effective date: {clause_analysis.effective_date}")
+        
+        # Expiration Date: CUAD takes priority
+        if clause_analysis.expiration_date:
+            merged["expiration_date"] = clause_analysis.expiration_date
+            logger.debug(f"[CUAD] Using CUAD-extracted expiration date: {clause_analysis.expiration_date}")
+        
+        # If no governing law found at all, mark explicitly
+        if not merged.get("governing_law"):
+            merged["jurisdiction_confidence"] = 0.0
+            merged["jurisdiction_source"] = "not_found"
+        
+        # Contract Type: Try to infer from CUAD clauses if not present
+        if not merged.get("contract_type"):
+            # Infer type based on present clauses
+            if clause_analysis.confidentiality.present and not clause_analysis.payment_terms.present:
+                merged["contract_type"] = "NDA"
+            elif clause_analysis.intellectual_property.present:
+                merged["contract_type"] = "License Agreement"
+            elif clause_analysis.payment_terms.present:
+                merged["contract_type"] = "Service Agreement"
+            else:
+                merged["contract_type"] = "General Agreement"
+        
+        return merged
+    
+    @staticmethod
+    def _extract_jurisdiction(clause_text: str) -> tuple:
+        """
+        Extract jurisdiction from governing law clause text.
+        
+        Uses ranked regex patterns covering common legal phrasings:
+        - "governed by the laws of [State/Country]"
+        - "laws of the State of [State]"
+        - "[State/Country] law shall govern"
+        - "courts of [Jurisdiction] shall have jurisdiction"
+        - "governed by [Jurisdiction]" (without 'laws of')
+        - "subject to [Jurisdiction] law"
+        
+        Returns:
+            Tuple of (jurisdiction_string or None, confidence_float)
+        """
+        import re
+        
+        if not clause_text:
+            return None, 0.0
+        
+        text = clause_text.strip()
+        
+        # Ranked patterns: most specific first, with confidence scores
+        patterns = [
+            # "laws of the State of X" / "laws of the Commonwealth of X"
+            (r'laws?\s+of\s+the\s+(?:State|Commonwealth|Province|Territory)\s+of\s+([A-Z][^,\.;\n]{1,60})', 0.95),
+            # "governed by the laws of X" / "subject to the laws of X"
+            (r'(?:governed|construed|interpreted|subject)\s+(?:by|to|under)\s+(?:the\s+)?laws?\s+of\s+([A-Z][^,\.;\n]{1,60})', 0.95),
+            # "laws of X" (standalone)
+            (r'laws?\s+of\s+([A-Z][^,\.;\n]{1,60})', 0.90),
+            # "X law shall govern" / "X law applies" / "X law"
+            (r'\b([A-Z][A-Za-z\s]{1,40})\s+laws?\s+(?:shall\s+)?(?:govern|appl)', 0.90),
+            # "courts of X shall have jurisdiction"
+            (r'courts?\s+(?:of|in|located in)\s+([A-Z][^,\.;\n]{1,60})\s+(?:shall\s+)?have\s+(?:exclusive\s+)?jurisdiction', 0.85),
+            # "governed by X" (without 'laws of')
+            (r'(?:governed|construed|interpreted)\s+(?:by|under)\s+(?:the\s+laws?\s+(?:of|applicable\s+in)\s+)?([A-Z][^,\.;\n]{1,60})', 0.80),
+            # "jurisdiction of X" / "jurisdiction shall be X"
+            (r'jurisdiction\s+(?:of|shall\s+be|is)\s+([A-Z][^,\.;\n]{1,60})', 0.80),
+            # "under X law"
+            (r'under\s+(?:the\s+)?([A-Z][A-Za-z\s]{1,40})\s+laws?', 0.80),
+        ]
+        
+        for pattern, confidence in patterns:
+            match = re.search(pattern, text)
+            if match:
+                jurisdiction = match.group(1).strip()
+                # Clean trailing words like "and", "or", "without"
+                jurisdiction = re.sub(r'\s+(?:and|or|without|except|including|excluding|shall|will|may)\s*$', '', jurisdiction, flags=re.IGNORECASE)
+                jurisdiction = jurisdiction.strip(' \t\n"\'')
+                if len(jurisdiction) >= 2:
+                    return jurisdiction, confidence
+        
+        # Last-resort: case-insensitive "laws of X"
+        fallback = re.search(r'laws?\s+of\s+([^,\.;\n]{2,60})', text, re.IGNORECASE)
+        if fallback:
+            jurisdiction = fallback.group(1).strip()
+            jurisdiction = re.sub(r'\s+(?:and|or|without|except)\s*$', '', jurisdiction, flags=re.IGNORECASE)
+            if len(jurisdiction) >= 2:
+                return jurisdiction.strip(), 0.6
+        
+        return None, 0.0
     
     async def get_contract_analysis(self, contract_id: str) -> Optional[Dict[str, Any]]:
         """

@@ -3,6 +3,7 @@ Lexra Engine - Backend API
 Enterprise AI contract intelligence platform
 """
 from fastapi import FastAPI, Request
+from fastapi.exceptions import ResponseValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
@@ -16,6 +17,7 @@ from app.core.config import settings
 from app.core.logging_config import setup_logging
 from app.core.limiter import limiter
 from app.services.auth_service import init_auth_tables
+from app.services.task_queue import task_queue
 
 # Setup logging
 setup_logging()
@@ -33,8 +35,11 @@ async def lifespan(app: FastAPI):
         logger.info("Auth tables initialized")
     except Exception as e:
         logger.error(f"Auth table init failed (non-fatal): {e}")
+    task_queue.start()
+    logger.info("Task queue started")
     yield
     logger.info("Shutting down CLM API Server...")
+    await task_queue.stop()
 
 
 # Initialize FastAPI app
@@ -64,6 +69,16 @@ from app.core.tracing import setup_tracing
 setup_tracing(app)
 
 
+# Request logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log every incoming request and response status for debugging."""
+    logger.info(f"→ {request.method} {request.url.path} from {request.client.host if request.client else '?'}")
+    response = await call_next(request)
+    logger.info(f"← {request.method} {request.url.path} → {response.status_code}")
+    return response
+
+
 # Health check endpoint
 @app.get("/")
 async def root():
@@ -91,6 +106,15 @@ app.include_router(analysis.router, prefix="/api/analysis", tags=["Analysis"])
 app.include_router(clauses.router, prefix="/api/clauses", tags=["Clauses"])
 app.include_router(cuad_analysis.router, prefix="/api/contracts", tags=["CUAD Analysis"])
 
+
+# Handle response serialization errors gracefully (e.g. Pydantic validation)
+@app.exception_handler(ResponseValidationError)
+async def response_validation_handler(request: Request, exc: ResponseValidationError):
+    logger.error(f"Response validation error on {request.method} {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Response serialization failed. This is a server bug."}
+    )
 
 # Global exception handler
 @app.exception_handler(Exception)

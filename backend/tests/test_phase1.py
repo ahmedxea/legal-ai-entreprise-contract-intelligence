@@ -271,6 +271,10 @@ def client(tmp_path_factory):
     from app.services.sqlite_service import DatabaseService
     test_db = DatabaseService(db_path=db_path)
 
+    from app.services.storage_quota_service import storage_quota_service as _quota_svc
+    _original_db = _quota_svc._db
+    _quota_svc._db = test_db
+
     from main import app
     from fastapi.testclient import TestClient
 
@@ -287,6 +291,8 @@ def client(tmp_path_factory):
         ),
     ):
         yield TestClient(app)
+
+    _quota_svc._db = _original_db
 
 
 class TestUploadValidation:
@@ -309,8 +315,8 @@ class TestUploadValidation:
         assert "empty" in response.json()["detail"].lower()
 
     def test_file_exceeding_size_limit_returns_400(self, client):
-        # Build a file just over 20 MB
-        oversized = b"X" * (21 * 1024 * 1024)
+        # Build a file just over 50 MB (the configured limit)
+        oversized = b"X" * (51 * 1024 * 1024)
         response = client.post(
             "/api/contracts/upload",
             files={"file": ("big.pdf", oversized, "application/pdf")},

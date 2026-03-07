@@ -129,7 +129,15 @@ def _make_mock_ai(
 
 
 def _structured_extraction_side_effect(entities, risks, gaps):
-    """Return different mocked values depending on which JSON schema is passed."""
+    """Return different mocked values depending on pipeline call order.
+
+    Call order:
+      1: entity extraction
+      2: CUAD metadata extraction (empty dict — triggers fallback)
+      3: CUAD clause extraction  (empty dict — triggers fallback)
+      4: risk detection fallback
+      5: gap  detection fallback
+    """
     call_index = {"n": 0}
 
     async def side_effect(prompt: str, context: str, schema: Dict):
@@ -137,9 +145,11 @@ def _structured_extraction_side_effect(entities, risks, gaps):
         n = call_index["n"]
         if n == 1:
             return entities
-        elif n == 2:
+        elif n in (2, 3):
+            return {}        # CUAD calls — wrong schema, will fail silently
+        elif n == 4:
             return risks
-        elif n == 3:
+        elif n == 5:
             return gaps
         return {}
 
@@ -401,6 +411,8 @@ class TestAnalysisServiceFailureResilience:
         # Entities and gaps return valid dicts, but risks returns garbage
         ai.structured_extraction = AsyncMock(side_effect=[
             MOCK_ENTITIES_RESPONSE,
+            {},                          # CUAD metadata (will fail silently)
+            {},                          # CUAD clauses (will fail silently)
             {"risks": "not-a-list"},  # malformed
             MOCK_GAPS_RESPONSE,
         ])
@@ -434,6 +446,8 @@ class TestAnalysisServiceFailureResilience:
         ai = MagicMock()
         ai.structured_extraction = AsyncMock(side_effect=[
             MOCK_ENTITIES_RESPONSE,
+            {},                          # CUAD metadata
+            {},                          # CUAD clauses
             MOCK_RISKS_RESPONSE,
             MOCK_GAPS_RESPONSE,
         ])

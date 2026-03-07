@@ -108,6 +108,10 @@ def test_client(tmp_path_factory):
     from fastapi.testclient import TestClient
 
     # Patch module-level db_service in contracts router + document_processor
+    from app.services.storage_quota_service import storage_quota_service as _quota_svc
+    original_quota_db = _quota_svc._db
+    _quota_svc._db = test_db
+
     with (
         patch("app.api.contracts.db_service", test_db),
         patch("app.services.document_processor.DocumentProcessorService._db", test_db),
@@ -123,3 +127,5 @@ def test_client(tmp_path_factory):
     ):
         client = TestClient(app)
         yield client
+
+    _quota_svc._db = original_quota_db

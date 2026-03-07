@@ -688,6 +688,67 @@ class RiskRule:
         return RiskLevel.MEDIUM, "Standard audit rights present"
     
     @staticmethod
+    def evaluate_governing_law(clause_text: str) -> tuple[RiskLevel, str]:
+        """
+        Evaluate governing law clause for jurisdiction clarity
+        
+        HIGH RISK:
+        - Multiple conflicting jurisdictions
+        - Vague or unrecognizable jurisdiction
+        
+        MEDIUM RISK:
+        - Jurisdiction present but ambiguous
+        - References to multiple non-conflicting jurisdictions
+        
+        LOW RISK:
+        - Clear single jurisdiction identified
+        - Well-known legal jurisdiction
+        """
+        if not clause_text:
+            return RiskLevel.HIGH, "No governing law clause found"
+        
+        text_lower = clause_text.lower()
+        
+        # Check for conflicting jurisdictions (multiple "laws of" or "governed by")
+        import re
+        jurisdiction_refs = re.findall(
+            r'(?:laws?\s+of|governed\s+by|jurisdiction\s+of)\s+[A-Z]',
+            clause_text
+        )
+        if len(jurisdiction_refs) >= 3:
+            return RiskLevel.HIGH, "Multiple potentially conflicting jurisdiction references"
+        
+        # Check for vague/ambiguous wording
+        vague_patterns = [
+            "applicable law",
+            "relevant jurisdiction",
+            "appropriate jurisdiction",
+            "as determined",
+            "to be agreed",
+            "mutually agreed",
+        ]
+        for pattern in vague_patterns:
+            if pattern in text_lower:
+                return RiskLevel.MEDIUM, f"Ambiguous jurisdiction language: '{pattern}'"
+        
+        # Check for clear jurisdiction indicators
+        clear_patterns = [
+            r'laws?\s+of\s+(?:the\s+)?(?:State|Commonwealth|Province)',
+            r'(?:governed|construed)\s+(?:by|under)\s+(?:the\s+)?laws?\s+of',
+            r'[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\s+laws?\s+(?:shall\s+)?(?:govern|appl)',
+            r'exclusive\s+jurisdiction',
+        ]
+        for pattern in clear_patterns:
+            if re.search(pattern, clause_text):
+                return RiskLevel.LOW, "Clear governing law jurisdiction identified"
+        
+        # Present but clarity uncertain
+        if len(clause_text) > 20:
+            return RiskLevel.LOW, "Governing Law clause present"
+        
+        return RiskLevel.MEDIUM, "Governing law clause present but jurisdiction clarity uncertain"
+    
+    @staticmethod
     def evaluate_post_termination(clause_text: str) -> tuple[RiskLevel, str]:
         """
         Evaluate post-termination services clause for exit obligations

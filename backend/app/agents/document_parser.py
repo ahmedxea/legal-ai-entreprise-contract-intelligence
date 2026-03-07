@@ -1,11 +1,21 @@
 """
-Document Parser Agent - Extracts text from PDF/DOCX files
+Document Parser Agent - Extracts text from PDF/DOCX files with OCR support
 """
 import logging
 from typing import Dict, Any, Optional
 import pdfplumber
 from docx import Document
 import io
+try:
+    import pytesseract
+    from pdf2image import convert_from_bytes
+    from PIL import Image
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+    pytesseract = None
+    convert_from_bytes = None
+    Image = None
 
 from app.services.storage_factory import storage as storage_service
 
@@ -39,6 +49,10 @@ class DocumentParserAgent:
                 result = await self._parse_pdf(file_content)
             elif blob_url.endswith('.docx') or 'docx' in blob_url.lower():
                 result = await self._parse_docx(file_content)
+            elif blob_url.endswith('.txt') or 'text/plain' in blob_url.lower():
+                result = await self._parse_txt(file_content)
+            elif any(blob_url.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp']):
+                result = await self._parse_image(file_content, blob_url)
             else:
                 raise ValueError(f"Unsupported file type: {blob_url}")
             
@@ -92,6 +106,12 @@ class DocumentParserAgent:
                     })
                     full_text += f"\n\n--- Page {page_num} ---\n\n{page_text}"
             
+            # Check if PDF is scanned (minimal text extracted)
+            avg_chars_per_page = len(full_text.strip()) / max(total_pages, 1)
+            if avg_chars_per_page < 100 and OCR_AVAILABLE:
+                logger.info(f"Detected scanned PDF (avg {avg_chars_per_page:.1f} chars/page), applying OCR...")
+                return await self._parse_pdf_with_ocr(file_content)
+            
             return {
                 "full_text": full_text.strip(),
                 "pages": pages,
@@ -107,7 +127,7 @@ class DocumentParserAgent:
             raise
     
     async def _parse_docx(self, file_content: bytes) -> Dict[str, Any]:
-        """Parse DOCX file"""
+        """Parse DOCX file with image OCR support"""
         try:
             docx_file = io.BytesIO(file_content)
             doc = Document(docx_file)
@@ -133,18 +153,169 @@ class DocumentParserAgent:
                 tables_text.append(table_text)
                 full_text += "\n\n" + table_text + "\n\n"
             
+            # Extract images and apply OCR if available
+            images_text = []
+            image_count = 0
+            
+            if OCR_AVAILABLE:
+                try:
+                    # Extract images from document relationships
+                    for rel in doc.part.rels.values():
+                        if "image" in rel.target_ref:
+                            try:
+                                image_data = rel.target_part.blob
+                                image = Image.open(io.BytesIO(image_data))
+                                
+                                # Apply OCR to image
+                                ocr_text = pytesseract.image_to_string(image, lang='eng')
+                                
+                                if ocr_text.strip():
+                                    images_text.append(ocr_text.strip())
+                                    full_text += f"\n\n--- Image {image_count + 1} (OCR) ---\n\n{ocr_text.strip()}\n\n"
+                                    image_count += 1
+                                    logger.info(f"Extracted {len(ocr_text)} characters from embedded image {image_count}")
+                            except Exception as img_err:
+                                logger.warning(f"Failed to extract image {image_count + 1}: {img_err}")
+                                continue
+                except Exception as ocr_err:
+                    logger.warning(f"Image extraction failed: {ocr_err}")
+            
+            # Check if document is mostly images (minimal text extracted)
+            text_from_docx = len(full_text.strip()) - sum(len(img) for img in images_text)
+            has_images = image_count > 0
+            mostly_images = has_images and text_from_docx < 100
+            
+            metadata = {
+                "image_count": image_count,
+                "has_ocr": has_images and OCR_AVAILABLE,
+            }
+            
+            if mostly_images:
+                metadata["note"] = "Document contains primarily images with OCR-extracted text"
+            
             return {
                 "full_text": full_text.strip(),
                 "paragraphs": paragraphs,
                 "tables": tables_text,
+                "images_text": images_text,
                 "paragraph_count": len(paragraphs),
                 "table_count": len(doc.tables),
+                "image_count": image_count,
                 "file_type": "docx",
-                "metadata": {}
+                "metadata": metadata
             }
             
         except Exception as e:
             logger.error(f"Error parsing DOCX: {e}")
+            raise
+    
+    async def _parse_txt(self, file_content: bytes) -> Dict[str, Any]:
+        """Parse plain text file"""
+        try:
+            # Try common encodings
+            for encoding in ['utf-8', 'latin-1', 'cp1252']:
+                try:
+                    text = file_content.decode(encoding)
+                    break
+                except UnicodeDecodeError:
+                    continue
+            else:
+                # If all encodings fail, use utf-8 with error handling
+                text = file_content.decode('utf-8', errors='replace')
+            
+            # Split into paragraphs (preserve structure)
+            paragraphs = []
+            for i, para in enumerate(text.split('\n\n')):
+                if para.strip():
+                    paragraphs.append({
+                        "index": i,
+                        "text": para.strip()
+                    })
+            
+            return {
+                "full_text": text.strip(),
+                "paragraphs": paragraphs,
+                "paragraph_count": len(paragraphs),
+                "file_type": "txt",
+                "metadata": {
+                    "parser": "text_decoder"
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error parsing TXT: {e}")
+            raise
+    
+    async def _parse_pdf_with_ocr(self, file_content: bytes) -> Dict[str, Any]:
+        """Parse scanned PDF using OCR"""
+        if not OCR_AVAILABLE:
+            raise RuntimeError("OCR libraries not available. Install: pip install pytesseract pdf2image pillow")
+        
+        try:
+            # Convert PDF pages to images
+            images = convert_from_bytes(file_content, dpi=300)
+            
+            pages = []
+            full_text = ""
+            
+            for page_num, image in enumerate(images, start=1):
+                # Apply OCR to extract text
+                text = pytesseract.image_to_string(image, lang='eng')
+                
+                pages.append({
+                    "page_number": page_num,
+                    "text": text
+                })
+                full_text += f"\n\n--- Page {page_num} ---\n\n{text}"
+            
+            logger.info(f"OCR extracted {len(full_text)} characters from {len(images)} pages")
+            
+            return {
+                "full_text": full_text.strip(),
+                "pages": pages,
+                "page_count": len(images),
+                "file_type": "pdf",
+                "metadata": {
+                    "parser": "pytesseract_ocr",
+                    "ocr_applied": True
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error parsing PDF with OCR: {e}")
+            raise
+    
+    async def _parse_image(self, file_content: bytes, filename: str) -> Dict[str, Any]:
+        """Parse image file using OCR"""
+        if not OCR_AVAILABLE:
+            raise RuntimeError("OCR libraries not available. Install: pip install pytesseract pillow")
+        
+        try:
+            # Open image
+            image = Image.open(io.BytesIO(file_content))
+            
+            # Apply OCR
+            text = pytesseract.image_to_string(image, lang='eng')
+            
+            logger.info(f"OCR extracted {len(text)} characters from image")
+            
+            return {
+                "full_text": text.strip(),
+                "pages": [{
+                    "page_number": 1,
+                    "text": text
+                }],
+                "page_count": 1,
+                "file_type": "image",
+                "metadata": {
+                    "parser": "pytesseract_ocr",
+                    "ocr_applied": True,
+                    "image_format": filename.split('.')[-1].upper()
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error parsing image with OCR: {e}")
             raise
     
     def chunk_text(

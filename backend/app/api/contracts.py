@@ -11,7 +11,7 @@ import mimetypes
 
 from app.models.schemas import (
     ContractUploadResponse, ContractDetail, ContractListItem,
-    ContractStatus, Language, Industry, GoverningLaw,
+    ContractStatus, Language,
     DocumentTextResponse, DocumentChunksResponse, ChunkItem,
     ContractAnalysisResponse,
 )
@@ -19,10 +19,12 @@ from app.services.storage_factory import storage as storage_service
 from app.services.sqlite_service import DatabaseService
 from app.services.document_processor import document_processor
 from app.services.auth_service import validate_session
+from app.services.storage_quota_service import storage_quota_service
 from app.core.config import settings
 from app.core.limiter import limiter
 from app.agents.orchestrator import ContractOrchestrator
 from app.services.analysis_service import analysis_service as phase2_analysis_service
+from app.services.task_queue import task_queue
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -32,7 +34,7 @@ db_service = DatabaseService()
 orchestrator = ContractOrchestrator()
 
 # Allowed file types and max size from config
-ALLOWED_EXTENSIONS = set(settings.supported_file_types_list)
+ALLOWED_EXTENSIONS = {".pdf", ".docx"}
 MAX_FILE_SIZE_BYTES = settings.MAX_FILE_SIZE_MB * 1024 * 1024
 
 
@@ -49,6 +51,125 @@ def _get_user_id_from_token(authorization: Optional[str]) -> str:
     return user.get("id", "anonymous")
 
 
+# ─── Dashboard (must be defined before /{contract_id} to avoid capture) ───
+
+@router.get("/dashboard")
+async def get_dashboard_stats(
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Return aggregated dashboard statistics for the current user.
+    """
+    try:
+        user_id = _get_user_id_from_token(authorization)
+        all_contracts = await db_service.list_contracts(user_id=user_id, limit=1000)
+
+        total = len(all_contracts)
+        analyzed = sum(1 for c in all_contracts if c.get("status") in ("analyzed", "completed"))
+        pending = sum(1 for c in all_contracts if c.get("status") in ("uploaded", "processing", "extracting", "extracted"))
+        failed = sum(1 for c in all_contracts if c.get("status") == "failed")
+
+        high_risks = 0
+        risk_scores = []
+        compliance_scores = []
+
+        for c in all_contracts:
+            analysis = c.get("analysis")
+            if not analysis:
+                continue
+            if isinstance(analysis, str):
+                import json as _json
+                try:
+                    analysis = _json.loads(analysis)
+                except Exception:
+                    continue
+
+            for r in (analysis.get("risks") or []):
+                if r.get("severity") in ("high", "critical"):
+                    high_risks += 1
+
+            score = analysis.get("overall_risk_score")
+            if score is not None:
+                risk_scores.append(score)
+
+            comp = analysis.get("compliance_score")
+            if comp is not None:
+                compliance_scores.append(comp)
+
+        avg_risk = round(sum(risk_scores) / len(risk_scores), 1) if risk_scores else 0
+        avg_compliance = round(sum(compliance_scores) / len(compliance_scores), 1) if compliance_scores else 0
+
+        return {
+            "total_contracts": total,
+            "analyzed_contracts": analyzed,
+            "pending_contracts": pending,
+            "failed_contracts": failed,
+            "high_risks": high_risks,
+            "average_risk_score": avg_risk,
+            "compliance_score": avg_compliance,
+        }
+    except Exception as e:
+        logger.error(f"Error computing dashboard stats: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to compute dashboard stats")
+
+
+@router.get("/queue")
+async def get_queue_status():
+    """Return current task queue status: pending count, active tasks, recent tasks."""
+    return {
+        "pending": task_queue.pending_count,
+        "active": task_queue.active_tasks,
+        "recent": task_queue.all_statuses()[:20],
+    }
+
+
+@router.get("/quota")
+async def get_user_quota(
+    authorization: Optional[str] = Header(None),
+):
+    """Return the current user's document count, storage usage, and quota limits."""
+    user_id = _get_user_id_from_token(authorization)
+    doc_count = await storage_quota_service.get_user_document_count(user_id)
+    storage_used = await storage_quota_service.get_user_storage_usage(user_id)
+    return {
+        "user_id": user_id,
+        "documents": {"used": doc_count, "limit": settings.MAX_DOCUMENTS_PER_USER},
+        "storage": {
+            "used_bytes": storage_used,
+            "used_mb": round(storage_used / (1024 * 1024), 2),
+            "limit_mb": settings.MAX_USER_STORAGE_MB,
+        },
+        "max_file_size_mb": settings.MAX_FILE_SIZE_MB,
+        "allowed_types": [".pdf", ".docx"],
+    }
+
+
+# ─── List (must be before /{contract_id} to avoid "/" being captured) ───
+
+@router.get("/", response_model=List[ContractListItem])
+async def list_contracts(
+    user_id: Optional[str] = Query(None, description="User ID"),
+    status: Optional[ContractStatus] = None,
+    limit: int = Query(50, le=100),
+    authorization: Optional[str] = Header(None),
+):
+    """
+    List all contracts for a user
+    """
+    try:
+        resolved_user_id = user_id or _get_user_id_from_token(authorization)
+        contracts = await db_service.list_contracts(
+            user_id=resolved_user_id,
+            status=status,
+            limit=limit
+        )
+        return contracts
+
+    except Exception as e:
+        logger.error(f"Error listing contracts: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list contracts")
+
+
 @router.post("/upload", response_model=ContractUploadResponse)
 @limiter.limit(settings.RATE_LIMIT_UPLOAD)
 async def upload_contract(
@@ -56,34 +177,31 @@ async def upload_contract(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     language: Language = Query(Language.ENGLISH),
-    industry: Optional[Industry] = Query(None),
+    industry: Optional[str] = Query(None),
     authorization: Optional[str] = Header(None),
 ):
     """
     Upload a contract document for analysis.
     Accepts PDF and DOCX files up to the configured size limit.
-    Uses auth token to identify the user.
+    Enforces per-user document count and storage quotas.
     """
     try:
         user_id = _get_user_id_from_token(authorization)
 
-        # Validate file type
-        file_ext = os.path.splitext(file.filename or "")[1].lower()
-        if file_ext not in ALLOWED_EXTENSIONS:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unsupported file type: '{file_ext}'. Only {', '.join(ALLOWED_EXTENSIONS)} files are accepted."
-            )
-
-        # Read and validate file size
+        # Read file content first so we know the exact size
         content = await file.read()
-        if len(content) == 0:
-            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
-        if len(content) > MAX_FILE_SIZE_BYTES:
-            raise HTTPException(
-                status_code=400,
-                detail=f"File size ({len(content) / (1024*1024):.1f} MB) exceeds the {settings.MAX_FILE_SIZE_MB} MB limit."
-            )
+
+        # Run all validations through the quota service
+        validation = await storage_quota_service.validate_upload(
+            user_id=user_id,
+            file_size=len(content),
+            filename=file.filename or "",
+            content_type=file.content_type,
+        )
+        if not validation.allowed:
+            raise HTTPException(status_code=400, detail=validation.error)
+
+        file_ext = os.path.splitext(file.filename or "")[1].lower()
 
         # Store file
         logger.info(f"Uploading contract: {file.filename} for user: {user_id}")
@@ -112,8 +230,8 @@ async def upload_contract(
             metadata={"filename": file.filename, "size": len(content)}
         )
 
-        # Kick off text extraction as a background task so this response is immediate
-        background_tasks.add_task(
+        # Kick off text extraction via the async task queue
+        await task_queue.submit(
             document_processor.process,
             contract_id,
             blob_url,
@@ -201,15 +319,16 @@ async def analyze_contract(
             }
 
         await db_service.update_contract_status(contract_id, ContractStatus.PROCESSING)
-        logger.info(f"Queued background analysis for contract: {contract_id}")
+        logger.info(f"Queued analysis for contract: {contract_id}")
 
-        background_tasks.add_task(
+        task_id = await task_queue.submit(
             phase2_analysis_service.run,
             contract_id,
         )
 
         return {
             "contract_id": contract_id,
+            "task_id": task_id,
             "status": "processing",
             "message": "Analysis started. Poll GET /api/contracts/{contract_id} to check progress.",
         }
@@ -393,30 +512,6 @@ async def get_contract_chunks(
         raise HTTPException(status_code=500, detail="Failed to retrieve contract chunks")
 
 
-@router.get("/", response_model=List[ContractListItem])
-async def list_contracts(
-    user_id: Optional[str] = Query(None, description="User ID"),
-    status: Optional[ContractStatus] = None,
-    limit: int = Query(50, le=100),
-    authorization: Optional[str] = Header(None),
-):
-    """
-    List all contracts for a user
-    """
-    try:
-        resolved_user_id = user_id or _get_user_id_from_token(authorization)
-        contracts = await db_service.list_contracts(
-            user_id=resolved_user_id,
-            status=status,
-            limit=limit
-        )
-        return contracts
-        
-    except Exception as e:
-        logger.error(f"Error listing contracts: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to list contracts")
-
-
 @router.get("/{contract_id}/file")
 async def download_contract_file(
     contract_id: str,
@@ -474,7 +569,8 @@ async def delete_contract(
     authorization: Optional[str] = Header(None),
 ):
     """
-    Delete a contract
+    Delete a contract and all associated data (analysis, chunks, text, blob).
+    Frees both document count and storage quota for the user.
     """
     try:
         resolved_user_id = user_id or _get_user_id_from_token(authorization)
@@ -486,14 +582,15 @@ async def delete_contract(
         # Delete from blob storage
         await storage_service.delete_file(contract['blob_url'])
         
-        # Delete from database
-        await db_service.delete_contract(contract_id)
+        # Cascade-delete from all database tables
+        await db_service.delete_contract_cascade(contract_id)
         
         # Log audit event
         await db_service.create_audit_log(
             user_id=resolved_user_id,
             action="delete_contract",
-            contract_id=contract_id
+            contract_id=contract_id,
+            metadata={"filename": contract.get("filename"), "file_size": contract.get("file_size")}
         )
         
         return {"message": "Contract deleted successfully"}

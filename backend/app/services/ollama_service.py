@@ -2,6 +2,7 @@
 Ollama service for local AI inference using Microsoft Phi-3 Mini
 Gracefully degrades to mock mode when Ollama/models are unavailable (e.g., Azure F1 tier)
 """
+import asyncio
 import logging
 from typing import List, Dict, Any, Optional
 import json
@@ -112,12 +113,13 @@ class OllamaService:
                             msg["content"] += "\n\nIMPORTANT: You must respond with valid JSON only. Do not include any text before or after the JSON."
                             break
             
-            # Call Ollama
-            response = ollama.chat(
+            # Call Ollama (sync library — run in thread to avoid blocking the event loop)
+            response = await asyncio.to_thread(
+                ollama.chat,
                 model=self.model_name,
                 messages=messages,
                 options=options,
-                format="json" if response_format and response_format.get("type") == "json_object" else None
+                format="json" if response_format and response_format.get("type") == "json_object" else None,
             )
             
             content = response.get("message", {}).get("content", "")
@@ -209,8 +211,10 @@ class OllamaService:
             return [0.0] * 384  # multilingual-e5-small dimension
         
         try:
-            # Get embeddings
-            embedding = self.embedding_model.encode(text, convert_to_numpy=True)
+            # Get embeddings (sync call — run in thread)
+            embedding = await asyncio.to_thread(
+                self.embedding_model.encode, text, convert_to_numpy=True
+            )
             return embedding.tolist()
             
         except Exception as e:

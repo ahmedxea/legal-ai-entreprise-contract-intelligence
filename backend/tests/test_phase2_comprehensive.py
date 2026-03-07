@@ -168,9 +168,19 @@ def _make_mock_db(
 
 
 def _side_effect_factory(entities=None, risks=None, gaps=None):
-    """Return a coroutine side_effect that cycles through entities → risks → gaps responses."""
+    """Return a coroutine side_effect that cycles through the analysis pipeline responses.
+
+    Call order:
+      0: entity extraction → MOCK_ENTITIES
+      1: CUAD metadata extraction → {} (wrong schema, triggers all-absent sanity check)
+      2: CUAD clause extraction  → {} (wrong schema, triggers all-absent sanity check)
+      3: risk detection fallback → MOCK_RISKS
+      4: gap  detection fallback → MOCK_GAPS
+    """
     responses = [
         entities or MOCK_ENTITIES,
+        {},                          # CUAD metadata (will fail silently)
+        {},                          # CUAD clause extraction (will fail silently)
         risks or MOCK_RISKS,
         gaps or MOCK_GAPS,
     ]
@@ -426,13 +436,13 @@ class TestTextExtractionOutput:
         assert result.endswith("[truncated]")
 
     def test_truncate_preserves_exactly_max_chars(self):
-        from app.services.analysis_service import _MAX_TEXT_CHARS
-        text = "X" * _MAX_TEXT_CHARS
+        from app.services.analysis_service import _SINGLE_PASS_CHARS
+        text = "X" * _SINGLE_PASS_CHARS
         assert _truncate(text) == text  # exactly the limit, no truncation
 
     def test_truncate_one_over_max_trims(self):
-        from app.services.analysis_service import _MAX_TEXT_CHARS
-        text = "Y" * (_MAX_TEXT_CHARS + 1)
+        from app.services.analysis_service import _SINGLE_PASS_CHARS
+        text = "Y" * (_SINGLE_PASS_CHARS + 1)
         result = _truncate(text)
         assert "[truncated]" in result
 
@@ -531,6 +541,8 @@ class TestEntityExtraction:
         ai = MagicMock()
         ai.structured_extraction = AsyncMock(side_effect=[
             "This is not JSON at all",  # entities call returns a string
+            {},                          # CUAD metadata
+            {},                          # CUAD clauses
             MOCK_RISKS,
             MOCK_GAPS,
         ])
@@ -598,7 +610,13 @@ class TestSummaryGeneration:
     @pytest.mark.asyncio
     async def test_summary_fallback_on_llm_exception(self):
         ai = MagicMock()
-        ai.structured_extraction = AsyncMock(side_effect=[MOCK_ENTITIES, MOCK_RISKS, MOCK_GAPS])
+        ai.structured_extraction = AsyncMock(side_effect=[
+            MOCK_ENTITIES,
+            {},              # CUAD metadata
+            {},              # CUAD clauses
+            MOCK_RISKS,
+            MOCK_GAPS,
+        ])
         ai.analyze_with_guidance = AsyncMock(side_effect=RuntimeError("LLM crashed"))
         db = _make_mock_db(contract_status="extracted")
         svc = AnalysisService(db=db, ai=ai)
@@ -612,7 +630,13 @@ class TestSummaryGeneration:
     async def test_summary_fallback_pipeline_completes_despite_summary_failure(self):
         """A summary failure must NOT abort the rest of the pipeline."""
         ai = MagicMock()
-        ai.structured_extraction = AsyncMock(side_effect=[MOCK_ENTITIES, MOCK_RISKS, MOCK_GAPS])
+        ai.structured_extraction = AsyncMock(side_effect=[
+            MOCK_ENTITIES,
+            {},              # CUAD metadata
+            {},              # CUAD clauses
+            MOCK_RISKS,
+            MOCK_GAPS,
+        ])
         ai.analyze_with_guidance = AsyncMock(side_effect=RuntimeError("LLM crashed"))
         db = _make_mock_db(contract_status="extracted")
         svc = AnalysisService(db=db, ai=ai)
@@ -627,7 +651,13 @@ class TestSummaryGeneration:
     @pytest.mark.asyncio
     async def test_empty_llm_response_uses_fallback(self):
         ai = MagicMock()
-        ai.structured_extraction = AsyncMock(side_effect=[MOCK_ENTITIES, MOCK_RISKS, MOCK_GAPS])
+        ai.structured_extraction = AsyncMock(side_effect=[
+            MOCK_ENTITIES,
+            {},              # CUAD metadata
+            {},              # CUAD clauses
+            MOCK_RISKS,
+            MOCK_GAPS,
+        ])
         ai.analyze_with_guidance = AsyncMock(return_value="")
         db = _make_mock_db(contract_status="extracted")
         svc = AnalysisService(db=db, ai=ai)
@@ -1146,6 +1176,8 @@ class TestErrorHandlingSafety:
         ai = MagicMock()
         ai.structured_extraction = AsyncMock(side_effect=[
             "!@#$% not json",   # entities
+            {},                  # CUAD metadata
+            {},                  # CUAD clauses
             MOCK_RISKS,
             MOCK_GAPS,
         ])
@@ -1163,6 +1195,8 @@ class TestErrorHandlingSafety:
         ai = MagicMock()
         ai.structured_extraction = AsyncMock(side_effect=[
             MOCK_ENTITIES,
+            {},                              # CUAD metadata
+            {},                              # CUAD clauses
             {"risks": "this is not a list"},
             MOCK_GAPS,
         ])
@@ -1180,6 +1214,8 @@ class TestErrorHandlingSafety:
         ai = MagicMock()
         ai.structured_extraction = AsyncMock(side_effect=[
             MOCK_ENTITIES,
+            {},                              # CUAD metadata
+            {},                              # CUAD clauses
             MOCK_RISKS,
             {"missing_clauses": 12345},   # number instead of list
         ])

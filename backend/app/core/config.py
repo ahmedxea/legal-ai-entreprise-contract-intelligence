@@ -47,8 +47,12 @@ class Settings(BaseSettings):
 
     # API Configuration - parse comma-separated string
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
-    MAX_FILE_SIZE_MB: int = 10
+    MAX_FILE_SIZE_MB: int = 50
     SUPPORTED_FILE_TYPES: str = ".pdf,.docx"
+
+    # User quota limits
+    MAX_DOCUMENTS_PER_USER: int = 10
+    MAX_USER_STORAGE_MB: int = 250
 
     # AI processing
     # Set MOCK_MODE=true to skip Ollama/Azure AI calls and return stub responses.

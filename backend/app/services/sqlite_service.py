@@ -873,5 +873,63 @@ class DatabaseService:
             conn.close()
 
 
+    # ── Quota helpers ──────────────────────────────────────────────────────
+
+    async def get_user_document_count(self, user_id: str) -> int:
+        """Return the number of documents owned by a user."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT COUNT(*) as cnt FROM contracts WHERE user_id = ?",
+                (user_id,),
+            )
+            row = cursor.fetchone()
+            return row["cnt"] if row else 0
+        except Exception as e:
+            logger.error(f"Error counting documents for {user_id}: {e}")
+            return 0
+        finally:
+            conn.close()
+
+    async def get_user_storage_usage(self, user_id: str) -> int:
+        """Return total bytes used by a user (sum of file_size across contracts)."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT COALESCE(SUM(file_size), 0) as total FROM contracts WHERE user_id = ?",
+                (user_id,),
+            )
+            row = cursor.fetchone()
+            return row["total"] if row else 0
+        except Exception as e:
+            logger.error(f"Error computing storage usage for {user_id}: {e}")
+            return 0
+        finally:
+            conn.close()
+
+    async def delete_contract_cascade(self, contract_id: str) -> None:
+        """Delete a contract and all related data from every table."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM contract_gaps WHERE document_id = ?", (contract_id,))
+            cursor.execute("DELETE FROM contract_risks WHERE document_id = ?", (contract_id,))
+            cursor.execute("DELETE FROM contract_summaries WHERE document_id = ?", (contract_id,))
+            cursor.execute("DELETE FROM contract_entities WHERE document_id = ?", (contract_id,))
+            cursor.execute("DELETE FROM document_chunks WHERE document_id = ?", (contract_id,))
+            cursor.execute("DELETE FROM document_text WHERE document_id = ?", (contract_id,))
+            cursor.execute("DELETE FROM contracts WHERE id = ?", (contract_id,))
+            conn.commit()
+            logger.info(f"Cascade-deleted contract {contract_id} and all related data")
+        except Exception as e:
+            logger.error(f"Error cascade-deleting contract {contract_id}: {e}")
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+
 # Global instance
 database_service = DatabaseService()

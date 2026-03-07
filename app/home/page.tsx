@@ -26,7 +26,7 @@ import Link from "next/link"
 import { GlowCard } from "@/components/ui/glow-card"
 import { StatCard } from "@/components/stat-card"
 
-const MAX_FILE_SIZE_MB = 10
+const MAX_FILE_SIZE_MB = 50
 const ALLOWED_EXTENSIONS = [".pdf", ".docx"]
 
 type FileStatus = "pending" | "uploading" | "success" | "extracting" | "analyzing" | "analyzed" | "error"

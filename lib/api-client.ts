@@ -144,17 +144,31 @@ class APIClient {
   }
 
   /** Poll GET /contracts/{id} until the contract reaches one of the target statuses.
-   *  Returns the final status string. Throws on "failed" or timeout. */
+   *  Returns the final status string. Throws on "failed" or timeout.
+   *  Tolerates up to 3 consecutive transient errors before giving up. */
   async pollContractStatus(
     contractId: string,
     targetStatuses: string[],
     intervalMs = 3000,
     maxAttempts = 40,
   ): Promise<string> {
+    let consecutiveErrors = 0
+    const maxConsecutiveErrors = 3
+
     for (let i = 0; i < maxAttempts; i++) {
-      const contract = await this.getContract(contractId)
-      if (targetStatuses.includes(contract.status)) return contract.status
-      if (contract.status === "failed") throw new Error("Contract processing failed")
+      try {
+        const contract = await this.getContract(contractId)
+        consecutiveErrors = 0
+        if (targetStatuses.includes(contract.status)) return contract.status
+        if (contract.status === "failed") throw new Error("Contract processing failed")
+      } catch (err: any) {
+        // If it's a definitive processing failure, re-throw immediately
+        if (err.message === "Contract processing failed") throw err
+        consecutiveErrors++
+        if (consecutiveErrors >= maxConsecutiveErrors) {
+          throw new Error(`Lost connection to server while checking contract status: ${err.message}`)
+        }
+      }
       await new Promise((r) => setTimeout(r, intervalMs))
     }
     throw new Error("Timed out waiting for contract processing")
