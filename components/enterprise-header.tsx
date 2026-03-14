@@ -42,15 +42,21 @@ export function EnterpriseHeader({ title, subtitle }: EnterpriseHeaderProps) {
   }
 
   return (
-    <header className="h-16 border-b backdrop-blur-sm bg-card/95 sticky top-0 z-50" style={{ borderColor: "rgb(var(--border))" }}>
+    <header className="h-16 border-b sticky top-0 z-50" style={{
+      background: "linear-gradient(135deg, rgba(2,11,27,0.85) 0%, rgba(10,31,68,0.85) 100%)",
+      backdropFilter: "blur(20px)",
+      WebkitBackdropFilter: "blur(20px)",
+      borderColor: "rgba(0,224,255,0.15)",
+      boxShadow: "0 4px 24px rgba(0,0,0,0.4), 0 1px 0 rgba(0,224,255,0.08)",
+    }}>
       <div className="h-full px-6 flex items-center justify-between">
         {/* Left: Page Title */}
         <div className="space-y-0.5 flex-shrink-0">
-          <h1 className="text-xl font-bold tracking-tight" style={{ color: "rgb(var(--foreground))" }}>
+          <h1 className="text-xl font-bold tracking-tight text-white">
             {title}
           </h1>
           {subtitle && (
-            <p className="text-xs" style={{ color: "rgb(var(--muted-foreground))" }}>
+            <p className="text-xs text-[#CBD5E1]">
               {subtitle}
             </p>
           )}
@@ -58,18 +64,17 @@ export function EnterpriseHeader({ title, subtitle }: EnterpriseHeaderProps) {
 
         {/* Center: Search */}
         <div className="relative hidden md:block group flex-1 max-w-sm mx-6">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors group-hover:text-primary" style={{ color: "rgb(var(--muted-foreground))" }} />
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#CBD5E1] transition-colors group-hover:text-[#00E0FF]" />
           <input
             type="text"
             placeholder="Search contracts..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={handleSearch}
-            className="input-enterprise pl-10 pr-4 py-2 w-full text-sm rounded-lg border transition-all duration-200 focus:border-primary/50 focus:shadow-lg focus:shadow-primary/10"
+            className="pl-10 pr-4 py-2 w-full text-sm rounded-lg transition-all duration-200 text-white placeholder-white/40 outline-none focus:shadow-[0_0_0_2px_rgba(0,224,255,0.3)]"
             style={{
-              background: "rgb(var(--background))",
-              color: "rgb(var(--foreground))",
-              border: `1.5px solid rgb(var(--border))`,
+              background: "rgba(255,255,255,0.07)",
+              border: "1.5px solid rgba(0,224,255,0.2)",
             }}
           />
         </div>
@@ -80,10 +85,10 @@ export function EnterpriseHeader({ title, subtitle }: EnterpriseHeaderProps) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="p-2.5 rounded-xl hover:bg-accent/80 hover:scale-105 transition-all duration-200 relative group"
+                className="p-2.5 rounded-xl hover:bg-white/10 hover:scale-105 transition-all duration-200 relative group"
                 title="Notifications"
               >
-                <Bell className="w-5 h-5 group-hover:rotate-12 transition-transform" style={{ color: "rgb(var(--foreground))" }} />
+                <Bell className="w-5 h-5 group-hover:rotate-12 transition-transform text-white/80 group-hover:text-[#00E0FF]" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="glass-card border-primary/20 rounded-xl w-64 p-4">
@@ -95,13 +100,13 @@ export function EnterpriseHeader({ title, subtitle }: EnterpriseHeaderProps) {
           {/* Theme Toggle */}
           <button
             onClick={toggleTheme}
-            className="p-2.5 rounded-xl hover:bg-accent/80 hover:scale-105 transition-all duration-200 group"
+            className="p-2.5 rounded-xl hover:bg-white/10 hover:scale-105 transition-all duration-200 group"
             title={isDark ? "Light Mode" : "Dark Mode"}
           >
             {isDark ? (
-              <Sun className="w-5 h-5 group-hover:rotate-12 transition-transform" style={{ color: "rgb(var(--foreground))" }} />
+              <Sun className="w-5 h-5 group-hover:rotate-12 transition-transform text-white/80 group-hover:text-[#00E0FF]" />
             ) : (
-              <Moon className="w-5 h-5 group-hover:-rotate-12 transition-transform" style={{ color: "rgb(var(--foreground))" }} />
+              <Moon className="w-5 h-5 group-hover:-rotate-12 transition-transform text-white/80 group-hover:text-[#00E0FF]" />
             )}
           </button>
 
