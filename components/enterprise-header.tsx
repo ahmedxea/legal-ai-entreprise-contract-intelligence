@@ -45,7 +45,7 @@ export function EnterpriseHeader({ title, subtitle }: EnterpriseHeaderProps) {
     <header className="h-16 border-b backdrop-blur-sm bg-card/95 sticky top-0 z-50" style={{ borderColor: "rgb(var(--border))" }}>
       <div className="h-full px-6 flex items-center justify-between">
         {/* Left: Page Title */}
-        <div className="space-y-0.5">
+        <div className="space-y-0.5 flex-shrink-0">
           <h1 className="text-xl font-bold tracking-tight" style={{ color: "rgb(var(--foreground))" }}>
             {title}
           </h1>
@@ -56,26 +56,26 @@ export function EnterpriseHeader({ title, subtitle }: EnterpriseHeaderProps) {
           )}
         </div>
 
-        {/* Right: Actions */}
-        <div className="flex items-center gap-2">
-          {/* Search */}
-          <div className="relative hidden md:block group">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 transition-colors group-hover:text-primary" style={{ color: "rgb(var(--muted-foreground))" }} />
-            <input
-              type="text"
-              placeholder="Search contracts..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={handleSearch}
-              className="input-enterprise pl-9 pr-4 py-2 w-64 text-sm rounded-lg border transition-all duration-200 focus:w-72 focus:border-primary/50 focus:shadow-lg focus:shadow-primary/10"
-              style={{
-                background: "rgb(var(--background))",
-                color: "rgb(var(--foreground))",
-                border: `1.5px solid rgb(var(--border))`,
-              }}
-            />
-          </div>
+        {/* Center: Search */}
+        <div className="relative hidden md:block group flex-1 max-w-sm mx-6">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 transition-colors group-hover:text-primary" style={{ color: "rgb(var(--muted-foreground))" }} />
+          <input
+            type="text"
+            placeholder="Search contracts..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={handleSearch}
+            className="input-enterprise pl-9 pr-4 py-2 w-full text-sm rounded-lg border transition-all duration-200 focus:border-primary/50 focus:shadow-lg focus:shadow-primary/10"
+            style={{
+              background: "rgb(var(--background))",
+              color: "rgb(var(--foreground))",
+              border: `1.5px solid rgb(var(--border))`,
+            }}
+          />
+        </div>
 
+        {/* Right: Actions */}
+        <div className="flex items-center gap-2 flex-shrink-0">
           {/* Notifications */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
