@@ -1,19 +1,44 @@
+# Dependencies
 node_modules/
 .venv/
 
+# Environment
 .env
 .env.*
 
+# OS
 .DS_Store
+Thumbs.db
 
+# Build outputs
 .next/
 out/
 *.tsbuildinfo
 
+# Archives
 *.zip
+
+# Temporary deployment directories
 backend-deploy-temp/
 
+# Local data (uploads and database)
 backend/data/uploads/
 backend/data/contracts.db
 
+# CUAD reference dataset (not part of the application)
 cuad-main/
+
+# Logs
+backend/logs/
+*.log
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.claude/
