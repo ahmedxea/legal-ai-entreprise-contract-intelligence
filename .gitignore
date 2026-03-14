@@ -24,6 +24,8 @@ backend-deploy-temp/
 # Local data (uploads and database)
 backend/data/uploads/
 backend/data/contracts.db
+data/contracts.db
+*.db
 
 # CUAD reference dataset (not part of the application)
 cuad-main/

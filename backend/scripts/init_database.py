@@ -76,11 +76,11 @@ async def create_demo_user():
             # Create demo user
             await azure_sql_service.create_user(
                 email="demo@lexra.ai",
-                password_hash=hash_password("demo123"),
+                password_hash=hash_password("demo12345@"),
                 full_name="Demo User",
                 organization="Lexra Demo"
             )
-            logger.info("✓ Demo user created: demo@lexra.ai / demo123")
+            logger.info("✓ Demo user created: demo@lexra.ai")
             
     except Exception as e:
         logger.error(f"Error creating demo user: {e}")

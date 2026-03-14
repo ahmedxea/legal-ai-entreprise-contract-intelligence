@@ -157,7 +157,7 @@ export default function LoginPage() {
                   onClick={async () => {
                     setIsLoading(true)
                     setError("")
-                    const result = await signIn("demo@lexra.ai", "demo123")
+                    const result = await signIn("demo@lexra.ai", "demo12345@")
                     if (result.success) {
                       router.push("/home")
                     } else {

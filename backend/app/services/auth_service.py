@@ -155,7 +155,7 @@ def _create_demo_user(conn: sqlite3.Connection):
                 role = ?
             WHERE id = ? OR email = ?
         """, (
-            hash_password("demo123"),
+            hash_password("demo12345@"),
             "Demo User",
             "Lexra Demo",
             "admin",
@@ -172,7 +172,7 @@ def _create_demo_user(conn: sqlite3.Connection):
             "demo@lexra.ai",
             "Demo User",
             now,
-            hash_password("demo123"),
+            hash_password("demo12345@"),
             "Demo User",
             "Lexra Demo",
             "admin",
@@ -180,7 +180,7 @@ def _create_demo_user(conn: sqlite3.Connection):
         ))
 
     conn.commit()
-    logger.info("Demo user created/updated: demo@lexra.ai / demo123")
+    logger.info("Demo user created/updated: demo@lexra.ai")
 
 
 def create_user(email: str, password: str, full_name: str, organization: str = "") -> Optional[Dict[str, Any]]:
