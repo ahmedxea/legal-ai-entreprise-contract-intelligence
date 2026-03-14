@@ -6,7 +6,7 @@
 :root {
   /* Enterprise Theme - Light surfaces on dark base */
   /* Main background - Porcelain (light content area) */
-  --background: 240 244 239; /* #F0F4EF */
+  --background: 255 255 255; /* #FFFFFF */
   --foreground: 13 24 33; /* #0D1821 - Text on light */
   
   /* Cards & Surfaces - Porcelain */
