@@ -43,7 +43,7 @@ export function EnterpriseHeader({ title, subtitle }: EnterpriseHeaderProps) {
 
   return (
     <header className="h-16 border-b sticky top-0 z-50" style={{
-      background: "linear-gradient(135deg, rgba(2,11,27,0.85) 0%, rgba(10,31,68,0.85) 100%)",
+      background: "linear-gradient(135deg, #020B1B 0%, #0A1F44 100%)",
       backdropFilter: "blur(20px)",
       WebkitBackdropFilter: "blur(20px)",
       borderColor: "rgba(0,224,255,0.15)",
