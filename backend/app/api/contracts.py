@@ -332,6 +332,7 @@ async def analyze_contract(
 @router.get("/{contract_id}/analysis", response_model=ContractAnalysisResponse)
 async def get_contract_analysis(
     contract_id: str,
+    request: Request,
     user_id: Optional[str] = Query(None, description="User ID"),
     authorization: Optional[str] = Header(None),
 ):
@@ -393,6 +394,7 @@ async def get_contract_analysis(
 @router.get("/{contract_id}", response_model=ContractDetail)
 async def get_contract(
     contract_id: str,
+    request: Request,
     user_id: Optional[str] = Query(None, description="User ID"),
     authorization: Optional[str] = Header(None),
 ):
@@ -417,6 +419,7 @@ async def get_contract(
 @router.get("/{contract_id}/text", response_model=DocumentTextResponse)
 async def get_contract_text(
     contract_id: str,
+    request: Request,
     user_id: Optional[str] = Query(None, description="User ID"),
     authorization: Optional[str] = Header(None),
 ):
@@ -459,6 +462,7 @@ async def get_contract_text(
 @router.get("/{contract_id}/chunks", response_model=DocumentChunksResponse)
 async def get_contract_chunks(
     contract_id: str,
+    request: Request,
     user_id: Optional[str] = Query(None, description="User ID"),
     authorization: Optional[str] = Header(None),
 ):
@@ -504,6 +508,7 @@ async def get_contract_chunks(
 @router.get("/{contract_id}/file")
 async def download_contract_file(
     contract_id: str,
+    request: Request,
     user_id: Optional[str] = Query(None, description="User ID"),
     authorization: Optional[str] = Header(None),
 ):
@@ -554,6 +559,7 @@ async def download_contract_file(
 @router.delete("/{contract_id}")
 async def delete_contract(
     contract_id: str,
+    request: Request,
     user_id: Optional[str] = Query(None, description="User ID"),
     authorization: Optional[str] = Header(None),
 ):

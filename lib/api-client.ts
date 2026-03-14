@@ -166,7 +166,7 @@ class APIClient {
     maxAttempts = 200,
   ): Promise<string> {
     let consecutiveErrors = 0
-    const maxConsecutiveErrors = 3
+    const maxConsecutiveErrors = 10
 
     for (let i = 0; i < maxAttempts; i++) {
       try {
