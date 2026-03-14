@@ -58,14 +58,14 @@ export function EnterpriseHeader({ title, subtitle }: EnterpriseHeaderProps) {
 
         {/* Center: Search */}
         <div className="relative hidden md:block group flex-1 max-w-sm mx-6">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 transition-colors group-hover:text-primary" style={{ color: "rgb(var(--muted-foreground))" }} />
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors group-hover:text-primary" style={{ color: "rgb(var(--muted-foreground))" }} />
           <input
             type="text"
             placeholder="Search contracts..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={handleSearch}
-            className="input-enterprise pl-9 pr-4 py-2 w-full text-sm rounded-lg border transition-all duration-200 focus:border-primary/50 focus:shadow-lg focus:shadow-primary/10"
+            className="input-enterprise pl-10 pr-4 py-2 w-full text-sm rounded-lg border transition-all duration-200 focus:border-primary/50 focus:shadow-lg focus:shadow-primary/10"
             style={{
               background: "rgb(var(--background))",
               color: "rgb(var(--foreground))",
