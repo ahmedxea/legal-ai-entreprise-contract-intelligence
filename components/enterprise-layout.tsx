@@ -1,6 +1,5 @@
 "use client"
 
-import { EnterpriseSidebar } from "./enterprise-sidebar"
 import { EnterpriseHeader } from "./enterprise-header"
 import { useAuth } from "@/lib/auth-context"
 import { usePathname, useRouter } from "next/navigation"
@@ -50,16 +49,13 @@ export function EnterpriseLayout({ children }: EnterpriseLayoutProps) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <EnterpriseSidebar />
-      <div className="flex-1 flex flex-col ml-64 transition-all duration-300">
-        <EnterpriseHeader title={pageInfo.title} subtitle={pageInfo.subtitle} />
-        <main className="flex-1 overflow-auto" style={{ background: "rgb(var(--background))" }}>
-          <div className="p-6 max-w-[1600px] mx-auto">
-            {children}
-          </div>
-        </main>
-      </div>
+    <div className="flex flex-col min-h-screen" style={{ background: "rgb(var(--background))" }}>
+      <EnterpriseHeader title={pageInfo.title} subtitle={pageInfo.subtitle} />
+      <main className="flex-1 overflow-auto">
+        <div className="p-6 max-w-[1600px] mx-auto">
+          {children}
+        </div>
+      </main>
     </div>
   )
 }
