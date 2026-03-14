@@ -4,6 +4,8 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { Calendar } from "lucide-react"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 
 interface Risk {
   id: number
@@ -43,20 +45,19 @@ export function RiskFilterBar({ risks, contracts, onFilter }: RiskFilterBarProps
   }
 
   const exportPDF = () => {
-    // Create CSV content for simple export
-    const csvContent =
-      "Level,Category,Date,Contract,Issue,Recommendation\n" +
-      risks
-        .map((r) => `${r.severity},${r.category},${r.date},${r.contract},"${r.description}","${r.recommendation}"`)
-        .join("\n")
-
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.href = url
-    link.download = "Risk_Report.csv"
-    link.click()
-    window.URL.revokeObjectURL(url)
+    const doc = new jsPDF()
+    doc.setFontSize(16)
+    doc.text("Risk Report", 14, 16)
+    doc.setFontSize(10)
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 24)
+    autoTable(doc, {
+      startY: 30,
+      head: [["Level", "Category", "Date", "Contract", "Issue", "Recommendation"]],
+      body: risks.map((r) => [r.severity, r.category, r.date, r.contract, r.description, r.recommendation]),
+      styles: { fontSize: 8, cellPadding: 3 },
+      columnStyles: { 4: { cellWidth: 50 }, 5: { cellWidth: 50 } },
+    })
+    doc.save("Risk_Report.pdf")
   }
 
   const exportCSV = () => {
@@ -135,10 +136,30 @@ export function RiskFilterBar({ risks, contracts, onFilter }: RiskFilterBarProps
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Date Range Placeholder */}
-      <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-background/50 backdrop-blur-sm border border-primary/30 text-muted-foreground">
-        <Calendar className="w-4 h-4 text-primary" />
-        <span className="text-sm">Date Range</span>
+      {/* Date Range */}
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-background/50 backdrop-blur-sm border border-primary/30">
+        <Calendar className="w-4 h-4 text-primary shrink-0" />
+        <input
+          type="date"
+          aria-label="From date"
+          value={dateRange.from ? dateRange.from.toISOString().split("T")[0] : ""}
+          onChange={(e) =>
+            setDateRange((prev) => ({ ...prev, from: e.target.value ? new Date(e.target.value) : null }))
+          }
+          className="text-sm bg-transparent outline-none"
+          style={{ color: "rgb(var(--foreground))" }}
+        />
+        <span className="text-xs text-muted-foreground">–</span>
+        <input
+          type="date"
+          aria-label="To date"
+          value={dateRange.to ? dateRange.to.toISOString().split("T")[0] : ""}
+          onChange={(e) =>
+            setDateRange((prev) => ({ ...prev, to: e.target.value ? new Date(e.target.value) : null }))
+          }
+          className="text-sm bg-transparent outline-none"
+          style={{ color: "rgb(var(--foreground))" }}
+        />
       </div>
 
       {/* Apply Filter */}

@@ -1,10 +1,10 @@
 #!/bin/bash
 # filepath: backend/azure-startup.sh
 
-echo "Starting Lexra Backend in DEMO mode..."
+echo "Starting Lexra Backend..."
 
 export ENVIRONMENT=production
-export MOCK_MODE=true
+# MOCK_MODE defaults to false — set it via Azure App Configuration if Ollama is not reachable
 
 cd /home/site/wwwroot
 

@@ -2,6 +2,8 @@
 
 import { Bell, Search, Moon, Sun } from "lucide-react"
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } from "@/components/ui/dropdown-menu"
 
 interface EnterpriseHeaderProps {
   title: string
@@ -10,6 +12,14 @@ interface EnterpriseHeaderProps {
 
 export function EnterpriseHeader({ title, subtitle }: EnterpriseHeaderProps) {
   const [isDark, setIsDark] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const router = useRouter()
+
+  const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && searchQuery.trim()) {
+      router.push(`/contracts?q=${encodeURIComponent(searchQuery.trim())}`)
+    }
+  }
 
   useEffect(() => {
     const theme = localStorage.getItem("theme")
@@ -54,6 +64,9 @@ export function EnterpriseHeader({ title, subtitle }: EnterpriseHeaderProps) {
             <input
               type="text"
               placeholder="Search contracts..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={handleSearch}
               className="input-enterprise pl-9 pr-4 py-2 w-64 text-sm rounded-lg border transition-all duration-200 focus:w-72 focus:border-primary/50 focus:shadow-lg focus:shadow-primary/10"
               style={{
                 background: "rgb(var(--background))",
@@ -64,13 +77,20 @@ export function EnterpriseHeader({ title, subtitle }: EnterpriseHeaderProps) {
           </div>
 
           {/* Notifications */}
-          <button
-            className="p-2.5 rounded-xl hover:bg-accent/80 hover:scale-105 transition-all duration-200 relative group"
-            title="Notifications"
-          >
-            <Bell className="w-5 h-5 group-hover:rotate-12 transition-transform" style={{ color: "rgb(var(--foreground))" }} />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="p-2.5 rounded-xl hover:bg-accent/80 hover:scale-105 transition-all duration-200 relative group"
+                title="Notifications"
+              >
+                <Bell className="w-5 h-5 group-hover:rotate-12 transition-transform" style={{ color: "rgb(var(--foreground))" }} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="glass-card border-primary/20 rounded-xl w-64 p-4">
+              <p className="text-sm font-semibold mb-1" style={{ color: "rgb(var(--foreground))" }}>Notifications</p>
+              <p className="text-xs" style={{ color: "rgb(var(--muted-foreground))" }}>No notifications yet.</p>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Theme Toggle */}
           <button

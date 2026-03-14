@@ -128,18 +128,20 @@ async def get_queue_status():
 async def list_contracts(
     user_id: Optional[str] = Query(None, description="User ID"),
     status: Optional[ContractStatus] = None,
-    limit: int = Query(50, le=100),
+    limit: int = Query(20, le=100),
+    offset: int = Query(0, ge=0),
     authorization: Optional[str] = Header(None),
 ):
     """
-    List all contracts for a user
+    List contracts for a user with pagination (limit/offset).
     """
     try:
         resolved_user_id = user_id or _get_user_id_from_token(authorization)
         contracts = await db_service.list_contracts(
             user_id=resolved_user_id,
             status=status,
-            limit=limit
+            limit=limit,
+            offset=offset,
         )
         return contracts
 

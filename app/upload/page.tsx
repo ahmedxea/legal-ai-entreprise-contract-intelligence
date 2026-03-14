@@ -37,7 +37,6 @@ interface UploadedFile {
 }
 
 export default function UploadPage() {
-  const { token } = useAuth()
   const [isDragging, setIsDragging] = useState(false)
   const [files, setFiles] = useState<UploadedFile[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -64,8 +63,14 @@ export default function UploadPage() {
     return null
   }
 
-  /* ── Upload a single file ── */
+  // Retry handler for files stuck in processing
+  const retryFile = useCallback((entry: UploadedFile) => {
+    if (entry.contractId) {
+      uploadFile({ ...entry, status: "pending", errorMessage: undefined })
+    }
+  }, [])
 
+  /* ── Upload a single file ── */
   const uploadFile = useCallback(
     async (entry: UploadedFile) => {
       setFiles((prev) =>
@@ -80,7 +85,7 @@ export default function UploadPage() {
 
         const res = await fetch(`${config.apiUrl}/api/contracts/upload?${params}`, {
           method: "POST",
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          credentials: "include",
           body: formData,
         })
 
@@ -108,26 +113,86 @@ export default function UploadPage() {
           )
         )
 
-        // Phase 1 → wait for text extraction to complete
-        await apiClient.pollContractStatus(contractId, ["extracted", "analyzed"])
+        // Phase 1 → wait for text extraction to complete (up to 10 min)
+        let extractionStatus: string | null = null
+        try {
+          extractionStatus = await apiClient.pollContractStatus(contractId, ["extracted", "analyzed"], 3000, 200)
+        } catch (err: any) {
+          // Always check contract status after timeout
+          const contract = await apiClient.getContract(contractId)
+          if (contract.status === "failed") {
+            setFiles((prev) =>
+              prev.map((f) =>
+                f.id === entry.id
+                  ? { ...f, status: "error" as FileStatus, errorMessage: "Contract processing failed. Please try again or contact support." }
+                  : f
+              )
+            )
+            return
+          } else {
+            setFiles((prev) =>
+              prev.map((f) =>
+                f.id === entry.id
+                  ? {
+                      ...f,
+                      status: "pending" as FileStatus,
+                      errorMessage: "Still processing after 10 minutes. Click retry to check again."
+                    }
+                  : f
+              )
+            )
+            return
+          }
+        }
 
-        setFiles((prev) =>
-          prev.map((f) =>
-            f.id === entry.id ? { ...f, status: "analyzing" as FileStatus } : f
+        if (extractionStatus === "extracted" || extractionStatus === "analyzed") {
+          setFiles((prev) =>
+            prev.map((f) =>
+              f.id === entry.id ? { ...f, status: "analyzing" as FileStatus } : f
+            )
           )
-        )
 
-        // Phase 2 → trigger AI analysis
-        await apiClient.analyzeContract(contractId)
+          // Phase 2 → trigger AI analysis
+          await apiClient.analyzeContract(contractId)
 
-        // Poll until analysis is done (up to ~2 min)
-        await apiClient.pollContractStatus(contractId, ["analyzed"])
-
-        setFiles((prev) =>
-          prev.map((f) =>
-            f.id === entry.id ? { ...f, status: "analyzed" as FileStatus } : f
-          )
-        )
+          // Poll until analysis is done (up to 10 min)
+          let analysisStatus: string | null = null
+          try {
+            analysisStatus = await apiClient.pollContractStatus(contractId, ["analyzed"], 3000, 200)
+          } catch (err: any) {
+            const contract = await apiClient.getContract(contractId)
+            if (contract.status === "failed") {
+              setFiles((prev) =>
+                prev.map((f) =>
+                  f.id === entry.id
+                    ? { ...f, status: "error" as FileStatus, errorMessage: "Contract analysis failed. Please try again or contact support." }
+                    : f
+                )
+              )
+              return
+            } else {
+              setFiles((prev) =>
+                prev.map((f) =>
+                  f.id === entry.id
+                    ? {
+                        ...f,
+                        status: "pending" as FileStatus,
+                        errorMessage: "Still analyzing after 10 minutes. Click retry to check again."
+                      }
+                    : f
+                )
+              )
+              return
+            }
+          }
+          if (analysisStatus === "analyzed") {
+            setFiles((prev) =>
+              prev.map((f) =>
+                f.id === entry.id ? { ...f, status: "analyzed" as FileStatus } : f
+              )
+            )
+          }
+        }
       } catch (err: any) {
         setFiles((prev) =>
           prev.map((f) =>
@@ -138,7 +203,7 @@ export default function UploadPage() {
         )
       }
     },
-    [token]
+    []
   )
 
   /* ── Add files (from input or drag) ── */
@@ -353,6 +418,15 @@ export default function UploadPage() {
                   </Link>
                 )}
 
+                {/* Retry for stuck processing */}
+                {file.status === "pending" && file.errorMessage && file.contractId && (
+                  <button
+                    className="ml-4 px-3 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700"
+                    onClick={() => retryFile(file)}
+                  >
+                    Retry
+                  </button>
+                )}
                 {/* Remove */}
                 <button
                   onClick={() => removeFile(file.id)}

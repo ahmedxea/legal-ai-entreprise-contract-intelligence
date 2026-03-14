@@ -54,7 +54,6 @@ function getGoverningLaw(contract: Contract) {
 }
 
 export default function DashboardPage() {
-  const { token } = useAuth()
   const [contracts, setContracts] = useState<Contract[]>([])
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -103,7 +102,7 @@ export default function DashboardPage() {
 
         const res = await fetch(`${config.apiUrl}/api/contracts/upload?${params}`, {
           method: "POST",
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          credentials: "include",
           body: formData,
         })
 
@@ -131,7 +130,7 @@ export default function DashboardPage() {
         )
 
         // Phase 1 → wait for text extraction to complete
-        await apiClient.pollContractStatus(contractId, ["extracted", "analyzed"])
+        await apiClient.pollContractStatus(contractId, ["extracted", "analyzed"], 3000, 200)
 
         setFiles((prev) =>
           prev.map((f) =>
@@ -143,7 +142,7 @@ export default function DashboardPage() {
         await apiClient.analyzeContract(contractId)
 
         // Poll until analysis is done
-        await apiClient.pollContractStatus(contractId, ["analyzed"])
+        await apiClient.pollContractStatus(contractId, ["analyzed"], 3000, 200)
 
         setFiles((prev) =>
           prev.map((f) =>
@@ -163,7 +162,7 @@ export default function DashboardPage() {
         )
       }
     },
-    [token]
+    []
   )
 
   /* ── Add files (from input or drag) ── */

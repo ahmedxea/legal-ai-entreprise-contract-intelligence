@@ -20,6 +20,8 @@ from app.services.auth_service import (
     create_session,
     validate_session,
     delete_session,
+    update_user,
+    change_user_password,
 )
 
 logger = logging.getLogger(__name__)
@@ -156,3 +158,63 @@ async def logout(
 
     _clear_session_cookie(response)
     return {"message": "Logged out successfully"}
+
+
+# ─── Profile Update ───────────────────────────────────────────────
+
+class UpdateProfileRequest(BaseModel):
+    full_name: Optional[str] = None
+    organization: Optional[str] = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+def _extract_token(request: Request, authorization: Optional[str]) -> Optional[str]:
+    token = request.cookies.get(_SESSION_COOKIE)
+    if not token and authorization:
+        token = authorization.replace("Bearer ", "").strip()
+    return token
+
+
+@router.put("/profile")
+async def update_profile(
+    body: UpdateProfileRequest,
+    request: Request,
+    authorization: Optional[str] = Header(None),
+):
+    """Update current user's profile (name, organization)."""
+    token = _extract_token(request, authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user = validate_session(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Session expired or invalid")
+
+    updated = update_user(user["id"], full_name=body.full_name, organization=body.organization)
+    if not updated:
+        raise HTTPException(status_code=400, detail="No changes applied")
+    return {"user": updated, "message": "Profile updated"}
+
+
+@router.post("/change-password")
+async def change_password(
+    body: ChangePasswordRequest,
+    request: Request,
+    authorization: Optional[str] = Header(None),
+):
+    """Change current user's password."""
+    token = _extract_token(request, authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user = validate_session(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Session expired or invalid")
+    if len(body.new_password) < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
+    ok = change_user_password(user["id"], body.current_password, body.new_password)
+    if not ok:
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    return {"message": "Password changed successfully"}

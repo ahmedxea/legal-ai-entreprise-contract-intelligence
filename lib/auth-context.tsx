@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { config } from "./config"
-import { apiClient } from "./api-client"
 
 const API_URL = config.apiUrl
 
@@ -17,7 +16,7 @@ interface User {
 
 interface AuthContextType {
   user: User | null
-  token: string | null
+  token: string | null  // always null — session is carried by HttpOnly cookie
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   signUp: (email: string, password: string, name: string, organization?: string) => Promise<{ success: boolean; error?: string }>
   signOut: () => void
@@ -29,41 +28,43 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [token, setToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Keep the apiClient singleton in sync with the current auth token
   useEffect(() => {
-    apiClient.setToken(token)
-  }, [token])
-  useEffect(() => {
-    const savedToken = localStorage.getItem("lexra_token")
+    // Restore user for instant UI, then validate the HttpOnly cookie with backend
     const savedUser = localStorage.getItem("lexra_user")
-
-    if (savedToken && savedUser) {
-      setToken(savedToken)
-      setUser(JSON.parse(savedUser))
-
-      // Validate token with backend
-      fetch(`${API_URL}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${savedToken}` },
-      })
-        .then((res) => {
-          if (!res.ok) {
-            // Token expired — clear session
-            localStorage.removeItem("lexra_token")
-            localStorage.removeItem("lexra_user")
-            setToken(null)
-            setUser(null)
-          }
-        })
-        .catch(() => {
-          // Backend unreachable — keep local session for now
-        })
-        .finally(() => setIsLoading(false))
-    } else {
-      setIsLoading(false)
+    if (savedUser) {
+      try { setUser(JSON.parse(savedUser)) } catch { localStorage.removeItem("lexra_user") }
     }
+
+    fetch(`${API_URL}/api/auth/me`, { credentials: "include" })
+      .then((res) => {
+        if (!res.ok) {
+          localStorage.removeItem("lexra_user")
+          setUser(null)
+          return null
+        }
+        return res.json()
+      })
+      .then((data) => {
+        if (data?.user) {
+          const u = data.user
+          const userData: User = {
+            id: u.id,
+            email: u.email,
+            name: u.full_name || u.name || u.email.split("@")[0],
+            full_name: u.full_name,
+            organization: u.organization,
+            role: u.role,
+          }
+          setUser(userData)
+          localStorage.setItem("lexra_user", JSON.stringify(userData))
+        }
+      })
+      .catch(() => {
+        // Backend unreachable — keep cached user
+      })
+      .finally(() => setIsLoading(false))
   }, [])
 
   const signIn = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
@@ -71,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await fetch(`${API_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email, password }),
       })
 
@@ -89,11 +91,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: data.user.role,
       }
 
-      setToken(data.token)
       setUser(userData)
-      localStorage.setItem("lexra_token", data.token)
       localStorage.setItem("lexra_user", JSON.stringify(userData))
-
       return { success: true }
     } catch {
       return { success: false, error: "Unable to connect to server" }
@@ -110,12 +109,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await fetch(`${API_URL}/api/auth/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-          full_name: name,
-          organization: organization || "",
-        }),
+        credentials: "include",
+        body: JSON.stringify({ email, password, full_name: name, organization: organization || "" }),
       })
 
       if (!res.ok) {
@@ -133,11 +128,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: data.user.role,
       }
 
-      setToken(data.token)
       setUser(userData)
-      localStorage.setItem("lexra_token", data.token)
       localStorage.setItem("lexra_user", JSON.stringify(userData))
-
       return { success: true }
     } catch {
       return { success: false, error: "Unable to connect to server" }
@@ -145,16 +137,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signOut = () => {
-    if (token) {
-      fetch(`${API_URL}/api/auth/logout`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => {})
-    }
+    fetch(`${API_URL}/api/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+    }).catch(() => {})
 
-    setToken(null)
     setUser(null)
-    localStorage.removeItem("lexra_token")
     localStorage.removeItem("lexra_user")
   }
 
@@ -162,12 +150,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
-        token,
+        token: null,
         signIn,
         signUp,
         signOut,
         isLoading,
-        isAuthenticated: !!user && !!token,
+        isAuthenticated: !!user,
       }}
     >
       {children}

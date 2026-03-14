@@ -510,6 +510,29 @@ class ClauseGeneratorService:
         if contract_context:
             user_message += f"\n\nContract context: {contract_context}"
 
+        def _is_valid_clause(text: str) -> bool:
+            """Return True only if LLM output looks like real legal text."""
+            if not text or len(text.strip()) < 300:
+                return False
+            legal_markers = ["shall", "party", "agreement", "liable", "terminate",
+                             "clause", "obligation", "pursuant", "herein", "thereof",
+                             "notwithstanding", "warranties", "indemnif", "govern"]
+            lower = text.lower()
+            return sum(1 for m in legal_markers if m in lower) >= 3
+
+        fallback_response = {
+            "clause_title": template["title"],
+            "clause_text": template["template"],
+            "explanation": (
+                f"This is a standard {template['title']} clause template based on CUAD patterns. "
+                f"Replace [PLACEHOLDER] values with contract-specific details."
+            ),
+            "clause_type": normalized_type,
+            "jurisdiction": jurisdiction or "general",
+            "template_used": True,
+            "cuad_category": cuad_category,
+        }
+
         try:
             clause_text = await self.llm.chat_completion(
                 messages=[
@@ -520,6 +543,13 @@ class ClauseGeneratorService:
                 max_tokens=1500,
             )
 
+            if not _is_valid_clause(clause_text):
+                logger.warning(
+                    f"LLM output for '{clause_type}' failed quality check "
+                    f"(len={len(clause_text or '')}); using CUAD template fallback"
+                )
+                return fallback_response
+
             explanation = await self._generate_explanation(
                 template["title"], risk_description, jurisdiction, normalized_type
             )
@@ -527,7 +557,7 @@ class ClauseGeneratorService:
             return {
                 "clause_title": template["title"],
                 "clause_text": clause_text.strip(),
-                "explanation": explanation.strip(),
+                "explanation": explanation,
                 "clause_type": normalized_type,
                 "jurisdiction": jurisdiction or "general",
                 "template_used": True,
@@ -536,19 +566,7 @@ class ClauseGeneratorService:
 
         except Exception as e:
             logger.error(f"LLM clause generation failed for '{clause_type}': {e}")
-            # Fallback: return the raw template with placeholders
-            return {
-                "clause_title": template["title"],
-                "clause_text": template["template"],
-                "explanation": (
-                    f"This is a standard {template['title']} clause template based on CUAD patterns. "
-                    f"Replace [PLACEHOLDER] values with contract-specific details."
-                ),
-                "clause_type": normalized_type,
-                "jurisdiction": jurisdiction or "general",
-                "template_used": True,
-                "cuad_category": cuad_category,
-            }
+            return fallback_response
 
     async def _generate_explanation(
         self, clause_title: str, risk_description: str, jurisdiction: str, clause_type: str
@@ -563,8 +581,9 @@ class ClauseGeneratorService:
             prompt += f" under {jurisdiction} law"
         prompt += ". Be concise and professional."
 
+        fallback = f"This {clause_title} clause is recommended to address identified contract risks and ensure comprehensive legal protection."
         try:
-            return await self.llm.chat_completion(
+            result = await self.llm.chat_completion(
                 messages=[
                     {"role": "system", "content": "You are a contract law expert. Provide brief, clear explanations."},
                     {"role": "user", "content": prompt},
@@ -572,8 +591,9 @@ class ClauseGeneratorService:
                 temperature=0.3,
                 max_tokens=300,
             )
+            return result.strip() if result and len(result.strip()) > 20 else fallback
         except Exception:
-            return f"This {clause_title} clause is recommended to address identified contract risks and ensure comprehensive legal protection."
+            return fallback
 
     async def _generate_generic_clause(
         self, clause_type: str, risk_description: str, jurisdiction: str, contract_context: str

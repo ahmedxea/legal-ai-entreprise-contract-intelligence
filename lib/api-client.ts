@@ -78,21 +78,9 @@ export interface CuadTemplate {
 
 class APIClient {
   private baseURL: string
-  private _token: string | null = null
 
   constructor(baseURL: string = config.apiUrl) {
     this.baseURL = baseURL
-  }
-
-  setToken(token: string | null) {
-    this._token = token
-  }
-
-  private get authHeaders(): Record<string, string> {
-    if (this._token) {
-      return { Authorization: `Bearer ${this._token}` }
-    }
-    return {}
   }
 
   // Health Check
@@ -103,17 +91,18 @@ class APIClient {
   }
 
   // Contracts
-  async getContracts(): Promise<Contract[]> {
-    const response = await fetch(`${this.baseURL}/api/contracts/`, {
-      headers: this.authHeaders,
-    })
+  async getContracts(limit = 20, offset = 0): Promise<Contract[]> {
+    const response = await fetch(
+      `${this.baseURL}/api/contracts/?limit=${limit}&offset=${offset}`,
+      { credentials: "include" }
+    )
     if (!response.ok) throw new Error("Failed to fetch contracts")
     return response.json()
   }
 
   async getContract(contractId: string): Promise<Contract> {
     const response = await fetch(`${this.baseURL}/api/contracts/${contractId}`, {
-      headers: this.authHeaders,
+      credentials: "include",
     })
     if (!response.ok) throw new Error("Failed to fetch contract")
     return response.json()
@@ -128,7 +117,7 @@ class APIClient {
 
     const response = await fetch(`${this.baseURL}/api/contracts/upload?${params}`, {
       method: "POST",
-      headers: this.authHeaders,
+      credentials: "include",
       body: formData,
     })
 
@@ -143,7 +132,7 @@ class APIClient {
   async analyzeContract(contractId: string): Promise<{ contract_id: string; status: string; message: string }> {
     const response = await fetch(`${this.baseURL}/api/contracts/${contractId}/analyze`, {
       method: "POST",
-      headers: this.authHeaders,
+      credentials: "include",
     })
 
     if (!response.ok) {
@@ -156,7 +145,7 @@ class APIClient {
 
   async getContractAnalysis(contractId: string): Promise<ContractAnalysisResult> {
     const response = await fetch(`${this.baseURL}/api/contracts/${contractId}/analysis`, {
-      headers: this.authHeaders,
+      credentials: "include",
     })
 
     if (!response.ok) {
@@ -174,7 +163,7 @@ class APIClient {
     contractId: string,
     targetStatuses: string[],
     intervalMs = 3000,
-    maxAttempts = 40,
+    maxAttempts = 200,
   ): Promise<string> {
     let consecutiveErrors = 0
     const maxConsecutiveErrors = 3
@@ -201,7 +190,7 @@ class APIClient {
   async deleteContract(contractId: string): Promise<void> {
     const response = await fetch(`${this.baseURL}/api/contracts/${contractId}`, {
       method: "DELETE",
-      headers: this.authHeaders,
+      credentials: "include",
     })
 
     if (!response.ok) throw new Error("Failed to delete contract")
@@ -220,7 +209,7 @@ class APIClient {
     file_type?: string
   }> {
     const response = await fetch(`${this.baseURL}/api/contracts/${contractId}/text`, {
-      headers: this.authHeaders,
+      credentials: "include",
     })
     if (!response.ok) {
       const body = await response.json().catch(() => ({ detail: "Failed to fetch text" }))
@@ -231,7 +220,7 @@ class APIClient {
 
   async getDashboardStats(): Promise<DashboardStats> {
     const response = await fetch(`${this.baseURL}/api/contracts/dashboard`, {
-      headers: this.authHeaders,
+      credentials: "include",
     })
     if (!response.ok) throw new Error("Failed to fetch dashboard stats")
     return response.json()
@@ -240,7 +229,8 @@ class APIClient {
   async generateClause(request: GenerateClauseRequest): Promise<GeneratedClause> {
     const response = await fetch(`${this.baseURL}/api/clauses/generate-for-risk`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...this.authHeaders },
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify(request),
     })
     if (!response.ok) {
@@ -252,9 +242,37 @@ class APIClient {
 
   async getCuadTemplates(): Promise<CuadTemplate[]> {
     const response = await fetch(`${this.baseURL}/api/clauses/cuad-templates`, {
-      headers: this.authHeaders,
+      credentials: "include",
     })
     if (!response.ok) throw new Error("Failed to fetch CUAD templates")
+    return response.json()
+  }
+
+  async updateProfile(data: { full_name?: string; organization?: string }): Promise<{ user: any; message: string }> {
+    const response = await fetch(`${this.baseURL}/api/auth/profile`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(data),
+    })
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({ detail: "Update failed" }))
+      throw new Error(body.detail || `Profile update failed (${response.status})`)
+    }
+    return response.json()
+  }
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
+    const response = await fetch(`${this.baseURL}/api/auth/change-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    })
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({ detail: "Password change failed" }))
+      throw new Error(body.detail || `Password change failed (${response.status})`)
+    }
     return response.json()
   }
 }

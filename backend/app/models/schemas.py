@@ -188,6 +188,9 @@ class ContractListItem(BaseModel):
     risk_level: Optional[RiskLevel] = None
     contract_value: Optional[float] = None
     expiry_date: Optional[str] = None
+    analysis: Optional[Dict[str, Any]] = None
+    extracted_data: Optional[Dict[str, Any]] = None
+    blob_url: Optional[str] = None
 
 
 class ClauseTemplate(BaseModel):

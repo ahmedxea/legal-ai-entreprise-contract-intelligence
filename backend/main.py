@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.core.logging_config import setup_logging
 from app.core.limiter import limiter
 from app.services.auth_service import init_auth_tables
+from app.services.database_factory import database_service as db_service
 from app.services.task_queue import task_queue
 
 # Setup logging
@@ -35,6 +36,24 @@ async def lifespan(app: FastAPI):
         logger.info("Auth tables initialized")
     except Exception as e:
         logger.error(f"Auth table init failed (non-fatal): {e}")
+
+    # Recover stale statuses left in-flight by reloads/crashes.
+    try:
+        recover_fn = getattr(db_service, "recover_stuck_contracts", None)
+        if callable(recover_fn):
+            recovered = await recover_fn()
+            recovered_total = (
+                sum(recovered.values())
+                if isinstance(recovered, dict)
+                else int(recovered or 0)
+            )
+            if recovered_total:
+                logger.warning(
+                    f"Recovered {recovered_total} stale contract status(es): {recovered}"
+                )
+    except Exception as e:
+        logger.error(f"Stale contract recovery failed (non-fatal): {e}")
+
     task_queue.start()
     logger.info("Task queue started")
     yield
@@ -92,10 +111,20 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint for monitoring"""
+    import httpx
+    ollama_status = "offline"
+    try:
+        async with httpx.AsyncClient(timeout=3) as client:
+            resp = await client.get("http://localhost:11434/api/tags")
+            if resp.status_code == 200:
+                ollama_status = "connected"
+    except Exception:
+        pass
     return {
         "status": "healthy",
         "environment": settings.ENVIRONMENT,
-        "azure_configured": bool(settings.AZURE_OPENAI_ENDPOINT)
+        "azure_configured": bool(settings.AZURE_OPENAI_ENDPOINT),
+        "ollama": ollama_status,
     }
 
 

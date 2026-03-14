@@ -24,7 +24,7 @@ azure-identity==1.19.0
 
 # Auth
 python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+bcrypt==5.0.0
 
 # Rate limiting
 slowapi==0.1.9

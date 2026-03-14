@@ -21,9 +21,41 @@ function getUploadDate(contract: Contract) {
   return contract.uploaded_at ?? contract.upload_date ?? new Date().toISOString()
 }
 
-function getGoverningLaw(contract: Contract) {
-  return contract.extracted_data?.governing_law || contract.analysis?.entities?.governing_law || contract.analysis?.extracted_data?.governing_law || "Unclassified"
+const JURISDICTION_MAP: Record<string, string> = {
+  "england and wales": "UK",
+  "england": "UK",
+  "united kingdom": "UK",
+  "great britain": "UK",
+  "united states": "USA",
+  "united states of america": "USA",
+  "hong kong special administrative region": "Hong Kong",
+  "hong kong sar": "Hong Kong",
+  "people's republic of china": "China",
+  "republic of china": "China",
+  "uae": "UAE",
+  "united arab emirates": "UAE",
+  "kingdom of saudi arabia": "Saudi Arabia",
+  "ksa": "Saudi Arabia",
 }
+
+function normalizeJurisdiction(raw: string): string {
+  const cleaned = raw
+    .replace(/^(the\s+)?(laws?\s+of(\s+the)?|governed?\s+by(\s+the)?|jurisdiction\s+of(\s+the)?)\s*/i, "")
+    .replace(/\s+(law|laws|legal\s+system|civil\s+law|common\s+law)$/i, "")
+    .replace(/\bstate\s+of\s+/i, "")
+    .trim()
+
+  const lower = cleaned.toLowerCase()
+  return JURISDICTION_MAP[lower] ?? cleaned.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ")
+}
+
+function getGoverningLaw(contract: Contract) {
+  const raw = contract.extracted_data?.governing_law || contract.analysis?.entities?.governing_law || contract.analysis?.extracted_data?.governing_law
+  if (!raw) return "Unclassified"
+  return normalizeJurisdiction(raw)
+}
+
+const PAGE_SIZE = 20
 
 export default function ContractsPage() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -32,16 +64,20 @@ export default function ContractsPage() {
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [deleteTarget, setDeleteTarget] = useState<Contract | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
 
   useEffect(() => {
-    fetchContracts()
+    fetchContracts(0)
   }, [])
 
-  const fetchContracts = async () => {
+  const fetchContracts = async (pageIndex: number) => {
     try {
       setLoading(true)
-      const data = await apiClient.getContracts()
+      const data = await apiClient.getContracts(PAGE_SIZE, pageIndex * PAGE_SIZE)
       setContracts(data)
+      setHasMore(data.length === PAGE_SIZE)
+      setPage(pageIndex)
     } catch (error) {
       console.error("Failed to fetch contracts:", error)
     } finally {
@@ -236,6 +272,29 @@ export default function ContractsPage() {
               Upload Contract
             </Button>
           </Link>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {!loading && (page > 0 || hasMore) && (
+        <div className="flex items-center justify-between mt-4">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page === 0}
+            onClick={() => fetchContracts(page - 1)}
+          >
+            Previous
+          </Button>
+          <span className="text-sm text-muted-foreground">Page {page + 1}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!hasMore}
+            onClick={() => fetchContracts(page + 1)}
+          >
+            Next
+          </Button>
         </div>
       )}
 

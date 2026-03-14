@@ -13,6 +13,17 @@ logger = logging.getLogger(__name__)
 # Conditional imports - graceful fallback for Azure deployment
 MOCK_MODE = os.environ.get("MOCK_MODE", "false").lower() == "true"
 
+
+def _int_env(name: str, default: int) -> int:
+    """Read an integer env var with a safe fallback."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
 try:
     if MOCK_MODE:
         raise ImportError("Mock mode enabled, skipping ollama import")
@@ -40,6 +51,8 @@ class OllamaService:
         self.model_name = model_name
         self.embedding_model_name = embedding_model
         self.mock_mode = MOCK_MODE or not OLLAMA_AVAILABLE
+        self.request_timeout_seconds = _int_env("OLLAMA_REQUEST_TIMEOUT_SECONDS", 120)
+        self.structured_max_tokens = _int_env("OLLAMA_STRUCTURED_MAX_TOKENS", 300)
         
         if self.mock_mode:
             logger.info("OllamaService running in MOCK MODE (no AI inference)")
@@ -114,12 +127,15 @@ class OllamaService:
                             break
             
             # Call Ollama (sync library — run in thread to avoid blocking the event loop)
-            response = await asyncio.to_thread(
-                ollama.chat,
-                model=self.model_name,
-                messages=messages,
-                options=options,
-                format="json" if response_format and response_format.get("type") == "json_object" else None,
+            response = await asyncio.wait_for(
+                asyncio.to_thread(
+                    ollama.chat,
+                    model=self.model_name,
+                    messages=messages,
+                    options=options,
+                    format="json" if response_format and response_format.get("type") == "json_object" else None,
+                ),
+                timeout=self.request_timeout_seconds,
             )
             
             content = response.get("message", {}).get("content", "")
@@ -130,6 +146,12 @@ class OllamaService:
             
             return content
             
+        except asyncio.TimeoutError:
+            logger.error(
+                f"Ollama request timed out after {self.request_timeout_seconds}s "
+                f"(model={self.model_name})"
+            )
+            return self._mock_response(messages)
         except Exception as e:
             logger.error(f"Error in chat completion: {e}", exc_info=True)
             # Return mock response for gracefuldegradation
@@ -139,7 +161,8 @@ class OllamaService:
         self,
         prompt: str,
         context: str,
-        schema: Dict
+        schema: Dict,
+        max_tokens: Optional[int] = None,
     ) -> Dict:
         """
         Extract structured data using JSON mode
@@ -148,6 +171,7 @@ class OllamaService:
             prompt: System prompt describing extraction task
             context: Contract text to extract from
             schema: JSON schema describing expected output
+            max_tokens: Optional output token cap to prevent runaway responses
             
         Returns:
             Extracted data as dictionary
@@ -166,6 +190,7 @@ class OllamaService:
         response = await self.chat_completion(
             messages=messages,
             temperature=0.0,
+            max_tokens=max_tokens or self.structured_max_tokens,
             response_format={"type": "json_object"}
         )
         

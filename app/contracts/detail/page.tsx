@@ -117,7 +117,7 @@ function ContractDetailContent() {
       setAnalyzing(true)
       setError(null)
       await apiClient.analyzeContract(id)
-      await apiClient.pollContractStatus(id, ["analyzed", "completed"], 3000, 40)
+      await apiClient.pollContractStatus(id, ["analyzed", "completed"], 3000, 200)
       await loadContractData()
     } catch (e: any) {
       setError(e.message ?? "Analysis failed")

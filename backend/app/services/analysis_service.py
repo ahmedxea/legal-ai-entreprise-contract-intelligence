@@ -26,6 +26,37 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from pydantic import BaseModel, ValidationError, field_validator
+
+
+class _EntityResponseModel(BaseModel):
+    parties: List[str] = []
+    effective_date: str = ""
+    expiration_date: str = ""
+    governing_law: str = ""
+    financial_terms: List[str] = []
+    obligations: List[str] = []
+
+
+class _RiskItem(BaseModel):
+    risk_type: str = "unknown"
+    severity: str = "medium"
+    description: str = ""
+    source_text: Optional[str] = None
+
+    @field_validator("severity")
+    @classmethod
+    def _valid_severity(cls, v: str) -> str:
+        return v if v in ("low", "medium", "high", "critical") else "medium"
+
+
+class _RisksResponseModel(BaseModel):
+    risks: List[_RiskItem] = []
+
+
+class _MissingClausesResponseModel(BaseModel):
+    missing_clauses: List[str] = []
+
 from app.models.schemas import ContractStatus, Language
 from app.services.sqlite_service import DatabaseService
 from app.services.ollama_service import OllamaService
@@ -43,7 +74,7 @@ _SINGLE_PASS_CHARS = 12_000
 _MAX_CHUNK_CHARS = 10_000
 
 # Maximum chunks processed per job to bound total LLM time.
-_MAX_CHUNKS = 20
+_MAX_CHUNKS = 8
 
 # Standard clauses evaluated in gap analysis
 _STANDARD_CLAUSES = [
@@ -156,6 +187,13 @@ class AnalysisService:
         if is_large:
             chunks = await self._db.get_chunks(contract_id)
             if chunks:
+                if len(chunks) > _MAX_CHUNKS:
+                    logger.warning(
+                        f"[analysis] Contract {contract_id} has {len(chunks)} chunks but only "
+                        f"the first {_MAX_CHUNKS} will be analysed — "
+                        f"{len(chunks) - _MAX_CHUNKS} chunks (~"
+                        f"{(len(chunks) - _MAX_CHUNKS) * _MAX_CHUNK_CHARS // 1000}k chars) truncated"
+                    )
                 chunk_texts = [
                     _truncate(c["chunk_text"], _MAX_CHUNK_CHARS)
                     for c in chunks[:_MAX_CHUNKS]
@@ -422,11 +460,11 @@ class AnalysisService:
         if not parsed:
             logger.warning("[analysis] Entity extraction returned no parseable JSON; using defaults")
             return schema.copy()
-        # Ensure all required keys are present
-        for key, default in schema.items():
-            if key not in parsed:
-                parsed[key] = default
-        return parsed
+        try:
+            return _EntityResponseModel(**parsed).model_dump()
+        except ValidationError as exc:
+            logger.warning(f"[analysis] Entity validation failed: {exc}; using defaults")
+            return schema.copy()
 
     async def _generate_summary(self, text: str) -> str:
         """Feature 2: executive summary (150–250 words)."""
@@ -469,11 +507,13 @@ class AnalysisService:
             context=text,
             schema=schema,
         )
-        if isinstance(raw, dict):
-            risks = raw.get("risks", [])
-        else:
-            parsed = _parse_json_response(str(raw), "risks")
-            risks = parsed.get("risks", []) if parsed else []
+        raw_dict = raw if isinstance(raw, dict) else (_parse_json_response(str(raw), "risks") or {})
+        try:
+            validated = _RisksResponseModel(**raw_dict)
+            risks = [r.model_dump() for r in validated.risks]
+        except ValidationError as exc:
+            logger.warning(f"[analysis] Risk validation failed: {exc}; using empty list")
+            risks = []
         return self._validate_risks(risks)
 
     async def _detect_missing_clauses(self, text: str) -> List[str]:
@@ -494,15 +534,14 @@ class AnalysisService:
             context=text,
             schema=schema,
         )
-        if isinstance(raw, dict):
-            missing = raw.get("missing_clauses", [])
-        else:
-            parsed = _parse_json_response(str(raw), "gaps")
-            missing = parsed.get("missing_clauses", []) if parsed else []
+        raw_dict = raw if isinstance(raw, dict) else (_parse_json_response(str(raw), "gaps") or {})
+        try:
+            validated = _MissingClausesResponseModel(**raw_dict)
+            missing = validated.missing_clauses
+        except ValidationError as exc:
+            logger.warning(f"[analysis] Missing clauses validation failed: {exc}; using empty list")
+            missing = []
 
-        # Whitelist: only keep recognised clause names; guard against non-list values
-        if not isinstance(missing, list):
-            return []
         return [c for c in missing if isinstance(c, str) and c in _STANDARD_CLAUSES]
 
     # ══════════════════════════════════════════════════════════════════════════

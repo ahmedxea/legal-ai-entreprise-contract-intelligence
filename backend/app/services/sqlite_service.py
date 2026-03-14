@@ -342,6 +342,65 @@ class DatabaseService:
             conn.rollback()
         finally:
             conn.close()
+
+    async def recover_stuck_contracts(self) -> Dict[str, int]:
+        """
+        Recover stale in-flight statuses after an unclean restart.
+
+        - `processing` + extracted text available -> `extracted`
+        - `processing` + no extracted text       -> `uploaded`
+        - `extracting`                           -> `uploaded`
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        recovered = {
+            "processing_to_extracted": 0,
+            "processing_to_uploaded": 0,
+            "extracting_to_uploaded": 0,
+        }
+
+        try:
+            cursor.execute(
+                """
+                UPDATE contracts
+                SET status = ?
+                WHERE status = ?
+                  AND id IN (SELECT document_id FROM document_text)
+                """,
+                (ContractStatus.EXTRACTED.value, ContractStatus.PROCESSING.value),
+            )
+            recovered["processing_to_extracted"] = max(cursor.rowcount, 0)
+
+            cursor.execute(
+                """
+                UPDATE contracts
+                SET status = ?
+                WHERE status = ?
+                  AND id NOT IN (SELECT document_id FROM document_text)
+                """,
+                (ContractStatus.UPLOADED.value, ContractStatus.PROCESSING.value),
+            )
+            recovered["processing_to_uploaded"] = max(cursor.rowcount, 0)
+
+            cursor.execute(
+                """
+                UPDATE contracts
+                SET status = ?
+                WHERE status = ?
+                """,
+                (ContractStatus.UPLOADED.value, ContractStatus.EXTRACTING.value),
+            )
+            recovered["extracting_to_uploaded"] = max(cursor.rowcount, 0)
+
+            conn.commit()
+            return recovered
+
+        except Exception as e:
+            logger.error(f"Error recovering stuck contracts: {e}")
+            conn.rollback()
+            return recovered
+        finally:
+            conn.close()
     
     async def update_contract_analysis(self, contract_id: str, analysis_result: Dict):
         """Update contract with analysis results"""
@@ -371,22 +430,24 @@ class DatabaseService:
         self,
         user_id: str,
         status: Optional[ContractStatus] = None,
-        limit: int = 50
+        limit: int = 50,
+        offset: int = 0,
     ) -> List[Dict]:
         """List contracts for a user"""
         conn = self._get_connection()
         cursor = conn.cursor()
-        
+
         try:
             query = "SELECT * FROM contracts WHERE user_id = ?"
             params: List[Any] = [user_id]
-            
+
             if status:
                 query += " AND status = ?"
                 params.append(status.value)
-            
-            query += " ORDER BY upload_date DESC LIMIT ?"
+
+            query += " ORDER BY upload_date DESC LIMIT ? OFFSET ?"
             params.append(limit)
+            params.append(offset)
             
             cursor.execute(query, params)
             rows = cursor.fetchall()

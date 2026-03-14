@@ -10,6 +10,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 from pathlib import Path
 from hashlib import sha256
+import bcrypt
 
 logger = logging.getLogger(__name__)
 
@@ -27,19 +28,28 @@ def _get_connection() -> sqlite3.Connection:
 
 
 def hash_password(password: str) -> str:
-    """Hash password with random salt using SHA-256"""
-    salt = secrets.token_hex(16)
-    hash_value = sha256(f"{salt}{password}".encode()).hexdigest()
-    return f"{salt}:{hash_value}"
+    """Hash password using bcrypt"""
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
-def verify_password(password: str, password_hash: str) -> bool:
-    """Verify password against stored hash"""
+def _verify_legacy_sha256(password: str, password_hash: str) -> bool:
+    """Verify against legacy SHA-256+salt format (salt:hash)"""
     try:
         salt, stored_hash = password_hash.split(":")
         return sha256(f"{salt}{password}".encode()).hexdigest() == stored_hash
     except (ValueError, AttributeError):
         return False
+
+
+def _is_bcrypt_hash(password_hash: str) -> bool:
+    return password_hash.startswith("$2b$") or password_hash.startswith("$2a$")
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    """Verify password against bcrypt or legacy SHA-256 hash"""
+    if _is_bcrypt_hash(password_hash):
+        return bcrypt.checkpw(password.encode(), password_hash.encode())
+    return _verify_legacy_sha256(password, password_hash)
 
 
 def init_auth_tables():
@@ -233,6 +243,13 @@ def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any]]:
         user = cursor.fetchone()
 
         if user and user["password_hash"] and verify_password(password, user["password_hash"]):
+            # Migrate legacy SHA-256 hash to bcrypt transparently on login
+            if not _is_bcrypt_hash(user["password_hash"]):
+                cursor.execute(
+                    "UPDATE users SET password_hash = ? WHERE id = ?",
+                    (hash_password(password), user["id"])
+                )
+                logger.info(f"Migrated password hash to bcrypt for user: {user['email']}")
             # Update last login timestamp
             cursor.execute(
                 "UPDATE users SET last_login = ? WHERE id = ?",
@@ -318,6 +335,57 @@ def delete_session(token: str):
     cursor.execute("DELETE FROM sessions WHERE token = ?", (token,))
     conn.commit()
     conn.close()
+
+
+def update_user(user_id: str, full_name: str = None, organization: str = None) -> Optional[Dict[str, Any]]:
+    """Update user profile fields. Returns updated user dict or None."""
+    conn = _get_connection()
+    cursor = conn.cursor()
+    try:
+        updates = []
+        params = []
+        if full_name is not None:
+            updates.append("full_name = ?")
+            updates.append("name = ?")
+            params.extend([full_name.strip(), full_name.strip()])
+        if organization is not None:
+            updates.append("organization = ?")
+            params.append(organization.strip())
+        if not updates:
+            return None
+        params.append(user_id)
+        cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", params)
+        conn.commit()
+        cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        return {
+            "id": row["id"],
+            "email": row["email"],
+            "full_name": row["full_name"] or row["name"] or "",
+            "name": row["full_name"] or row["name"] or "",
+            "organization": row["organization"] or "",
+            "role": row["role"] or "user",
+        }
+    finally:
+        conn.close()
+
+
+def change_user_password(user_id: str, current_password: str, new_password: str) -> bool:
+    """Change user password. Returns True on success."""
+    conn = _get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+        row = cursor.fetchone()
+        if not row or not verify_password(current_password, row["password_hash"]):
+            return False
+        cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hash_password(new_password), user_id))
+        conn.commit()
+        return True
+    finally:
+        conn.close()
 
 
 def cleanup_expired_sessions():
