@@ -24,12 +24,12 @@ export function EnterpriseLayout({ children }: EnterpriseLayoutProps) {
   const pageInfo = pageTitles[pathname] || { title: "Lexra Dashboard", subtitle: "" }
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated && pathname !== "/" && pathname !== "/login") {
+    if (!isLoading && !isAuthenticated && pathname !== "/" && pathname !== "/login" && pathname !== "/lexra") {
       router.push("/login")
     }
   }, [isAuthenticated, isLoading, pathname, router])
 
-  if (pathname === "/" || pathname === "/login") {
+  if (pathname === "/" || pathname === "/login" || pathname === "/lexra") {
     return <>{children}</>
   }
 

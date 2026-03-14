@@ -55,7 +55,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Back Button */}
         <button
-          onClick={() => router.push("/home")}
+          onClick={() => router.push("/lexra")}
           className="flex items-center gap-2 text-[#00E0FF] hover:text-[#00C6FF] transition-colors mb-8"
         >
           <ArrowLeft className="w-4 h-4" />
