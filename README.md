@@ -18,19 +18,13 @@ Lexra is an enterprise-grade platform that analyzes legal contracts using AI. It
 
 ## Architecture
 
-```
-Browser (Next.js static export)
-         |
-         | REST API
-         |
-FastAPI Backend (Python 3.11)
-    |           |           |
-  SQLite     Local FS    Ollama (Phi-3 Mini)
-  (dev)      (dev)       LLM inference
-    |           |
-  Azure SQL  Azure Blob
-  (prod)     (prod)
-```
+### Detailed Architecture
+
+![Lexra Detailed Architecture](architectures/lexra-architecture-diagram.png)
+
+### High-Level Architecture
+
+![Lexra High-Level Architecture](architectures/high-level-lexra-architecture.png)
 
 The frontend is a statically exported Next.js application deployed to Azure Static Web Apps. The backend is a FastAPI service deployed to Azure App Service. In development, SQLite and local filesystem are used. In production, these are replaced by Azure SQL/PostgreSQL and Azure Blob Storage.
 
@@ -146,7 +140,7 @@ Application available at `http://localhost:3000`
 
 ```
 Email:    demo@lexra.ai
-Password: demo123
+Password: demo12345@
 ```
 
 ---
