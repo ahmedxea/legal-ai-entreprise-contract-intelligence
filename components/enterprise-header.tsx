@@ -82,7 +82,7 @@ export function EnterpriseHeader({ title, subtitle }: EnterpriseHeaderProps) {
       {/* Center: Nav + Search */}
       <div className="flex items-center gap-1 mx-8 flex-1 justify-center">
         {/* Nav pill */}
-        <nav className="flex items-center gap-1 px-2 py-1.5 rounded-2xl mr-4" style={{
+        <nav className="flex items-center gap-0.5 px-2 py-1.5 rounded-2xl mr-4" style={{
           background: "rgba(0,0,0,0.04)",
           border: "1px solid rgba(0,0,0,0.08)",
         }}>
@@ -93,10 +93,10 @@ export function EnterpriseHeader({ title, subtitle }: EnterpriseHeaderProps) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
                   isActive
-                    ? "bg-white text-gray-900 shadow-[0_2px_8px_rgba(0,0,0,0.12)]"
-                    : "text-gray-500 hover:text-gray-900 hover:bg-white/60"
+                    ? "bg-white text-[#3B0FA0] shadow-[0_2px_8px_rgba(0,0,0,0.12)]"
+                    : "text-gray-500 hover:text-[#1E3A8A] hover:bg-white/70"
                 }`}
               >
                 <Icon className="w-3.5 h-3.5 flex-shrink-0" />

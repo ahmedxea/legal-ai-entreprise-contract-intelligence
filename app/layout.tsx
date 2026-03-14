@@ -14,7 +14,9 @@ const lato = Lato({
 export const metadata: Metadata = {
   title: "Lexra — Enterprise AI Contract Intelligence",
   description: "Lexra extracts key contract information, identifies risks and missing clauses, and enables secure AI-powered analysis.",
-  generator: "v0.app",
+  icons: {
+    icon: "/favicon.svg",
+  },
 }
 
 export default function RootLayout({
