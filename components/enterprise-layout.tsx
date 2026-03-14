@@ -49,20 +49,9 @@ export function EnterpriseLayout({ children }: EnterpriseLayoutProps) {
   }
 
   return (
-    <div className="flex flex-col min-h-screen" style={{ background: "#020B1B" }}>
-      {/* Subtle background grid — same as landing hero */}
-      <div className="fixed inset-0 pointer-events-none" style={{
-        backgroundImage: "linear-gradient(rgba(0,122,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,122,255,0.04) 1px, transparent 1px)",
-        backgroundSize: "64px 64px",
-        zIndex: 0,
-      }} />
-      {/* Ambient glow */}
-      <div className="fixed top-0 right-0 w-[600px] h-[600px] pointer-events-none" style={{
-        background: "radial-gradient(circle, rgba(0,122,255,0.06) 0%, transparent 70%)",
-        zIndex: 0,
-      }} />
+    <div className="flex flex-col min-h-screen" style={{ background: "rgb(var(--background))" }}>
       <EnterpriseHeader title={pageInfo.title} subtitle={pageInfo.subtitle} />
-      <main className="flex-1 overflow-auto relative z-10">
+      <main className="flex-1 overflow-auto">
         <div className="p-6 max-w-[1600px] mx-auto">
           {children}
         </div>

@@ -64,11 +64,11 @@ export function EnterpriseHeader({ title, subtitle }: EnterpriseHeaderProps) {
 
   return (
     <header className="h-16 sticky top-0 z-50 px-6 flex items-center justify-between" style={{
-      background: "rgba(2, 11, 27, 0.75)",
-      backdropFilter: "blur(24px) saturate(180%)",
-      WebkitBackdropFilter: "blur(24px) saturate(180%)",
-      borderBottom: "1px solid rgba(0,122,255,0.15)",
-      boxShadow: "0 4px 32px rgba(0,0,0,0.4), inset 0 -1px 0 rgba(0,122,255,0.1)",
+      background: "rgba(255, 255, 255, 0.75)",
+      backdropFilter: "blur(24px)",
+      WebkitBackdropFilter: "blur(24px)",
+      borderBottom: "1px solid rgba(0,0,0,0.08)",
+      boxShadow: "0 4px 24px rgba(0,0,0,0.08), inset 0 -1px 0 rgba(0,0,0,0.04)",
     }}>
 
       {/* Left: Logo */}
@@ -76,16 +76,15 @@ export function EnterpriseHeader({ title, subtitle }: EnterpriseHeaderProps) {
         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#007AFF] to-[#00C6FF] flex items-center justify-center shadow-[0_0_16px_rgba(0,198,255,0.4)]">
           <FileText className="w-4 h-4 text-white" />
         </div>
-        <span className="text-base font-bold text-white tracking-tight">Lexra</span>
+        <span className="text-base font-bold text-gray-900 tracking-tight">Lexra</span>
       </div>
 
       {/* Center: Nav + Search */}
       <div className="flex items-center gap-1 mx-8 flex-1 justify-center">
         {/* Nav pill */}
         <nav className="flex items-center gap-0.5 px-2 py-1.5 rounded-2xl mr-4" style={{
-          background: "rgba(0,122,255,0.08)",
-          border: "1px solid rgba(0,122,255,0.15)",
-          backdropFilter: "blur(12px)",
+          background: "rgba(0,0,0,0.04)",
+          border: "1px solid rgba(0,0,0,0.08)",
         }}>
           {navItems.map((item) => {
             const Icon = item.icon
@@ -96,10 +95,9 @@ export function EnterpriseHeader({ title, subtitle }: EnterpriseHeaderProps) {
                 href={item.href}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
                   isActive
-                    ? "text-white shadow-[0_2px_12px_rgba(0,122,255,0.4)]"
-                    : "text-white/50 hover:text-white hover:bg-white/8"
+                    ? "bg-white text-[#3B0FA0] shadow-[0_2px_8px_rgba(0,0,0,0.12)]"
+                    : "text-gray-500 hover:text-[#1E3A8A] hover:bg-white/70"
                 }`}
-                style={isActive ? { background: "linear-gradient(135deg, #007AFF, #00C6FF)" } : {}}
               >
                 <Icon className="w-3.5 h-3.5 flex-shrink-0" />
                 <span>{item.label}</span>
@@ -117,13 +115,13 @@ export function EnterpriseHeader({ title, subtitle }: EnterpriseHeaderProps) {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={handleSearch}
-            className="pl-9 pr-4 py-1.5 w-full text-sm rounded-xl transition-all duration-200 text-white placeholder-white/30 outline-none"
+            className="pl-9 pr-4 py-1.5 w-full text-sm rounded-xl transition-all duration-200 text-gray-900 placeholder-gray-400 outline-none"
             style={{
-              background: "rgba(0,122,255,0.08)",
-              border: "1px solid rgba(0,122,255,0.2)",
+              background: "rgba(0,0,0,0.05)",
+              border: "1px solid rgba(0,0,0,0.1)",
             }}
-            onFocus={(e) => { e.currentTarget.style.border = "1px solid rgba(0,198,255,0.5)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(0,122,255,0.15)" }}
-            onBlur={(e) => { e.currentTarget.style.border = "1px solid rgba(0,122,255,0.2)"; e.currentTarget.style.boxShadow = "none" }}
+            onFocus={(e) => { e.currentTarget.style.border = "1px solid rgba(59,130,246,0.5)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(59,130,246,0.1)" }}
+            onBlur={(e) => { e.currentTarget.style.border = "1px solid rgba(0,0,0,0.1)"; e.currentTarget.style.boxShadow = "none" }}
           />
         </div>
       </div>
@@ -142,52 +140,52 @@ export function EnterpriseHeader({ title, subtitle }: EnterpriseHeaderProps) {
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="p-2 rounded-xl hover:bg-white/8 transition-all duration-200 group" title="Notifications">
-              <Bell className="w-4 h-4 text-white/40 group-hover:text-white group-hover:rotate-12 transition-all" />
+            <button className="p-2 rounded-xl hover:bg-black/05 transition-all duration-200 group" title="Notifications">
+              <Bell className="w-4 h-4 text-gray-500 group-hover:text-gray-900 group-hover:rotate-12 transition-all" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="rounded-xl w-64 p-4" style={{
-            background: "rgba(10,31,68,0.95)",
-            backdropFilter: "blur(24px)",
-            border: "1px solid rgba(0,122,255,0.2)",
-            boxShadow: "0 16px 48px rgba(0,0,0,0.5)",
+            background: "rgba(255,255,255,0.95)",
+            backdropFilter: "blur(20px)",
+            border: "1px solid rgba(0,0,0,0.08)",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
           }}>
-            <p className="text-sm font-semibold text-white mb-1">Notifications</p>
-            <p className="text-xs text-white/40">No notifications yet.</p>
+            <p className="text-sm font-semibold text-gray-900 mb-1">Notifications</p>
+            <p className="text-xs text-gray-400">No notifications yet.</p>
           </DropdownMenuContent>
         </DropdownMenu>
 
         {/* Theme */}
-        <button onClick={toggleTheme} className="p-2 rounded-xl hover:bg-white/8 transition-all duration-200 group" title={isDark ? "Light Mode" : "Dark Mode"}>
+        <button onClick={toggleTheme} className="p-2 rounded-xl hover:bg-black/05 transition-all duration-200 group" title={isDark ? "Light Mode" : "Dark Mode"}>
           {isDark
-            ? <Sun className="w-4 h-4 text-white/40 group-hover:text-white group-hover:rotate-12 transition-all" />
-            : <Moon className="w-4 h-4 text-white/40 group-hover:text-white group-hover:-rotate-12 transition-all" />
+            ? <Sun className="w-4 h-4 text-gray-500 group-hover:text-gray-900 group-hover:rotate-12 transition-all" />
+            : <Moon className="w-4 h-4 text-gray-500 group-hover:text-gray-900 group-hover:-rotate-12 transition-all" />
           }
         </button>
 
         {/* User avatar */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-xl hover:bg-white/8 transition-all duration-200 group ml-1">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#007AFF] to-[#00C6FF] flex items-center justify-center text-xs font-bold text-white shadow-[0_2px_8px_rgba(0,122,255,0.4)]">
+            <button className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-xl hover:bg-black/05 transition-all duration-200 group ml-1">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#007AFF] to-[#00C6FF] flex items-center justify-center text-xs font-bold text-white shadow-sm">
                 {initials}
               </div>
-              <ChevronDown className="w-3 h-3 text-white/30 group-hover:text-white/70 transition-colors" />
+              <ChevronDown className="w-3 h-3 text-gray-400 group-hover:text-gray-600 transition-colors" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="rounded-xl w-48 p-2" style={{
-            background: "rgba(10,31,68,0.95)",
-            backdropFilter: "blur(24px)",
-            border: "1px solid rgba(0,122,255,0.2)",
-            boxShadow: "0 16px 48px rgba(0,0,0,0.5)",
+            background: "rgba(255,255,255,0.95)",
+            backdropFilter: "blur(20px)",
+            border: "1px solid rgba(0,0,0,0.08)",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
           }}>
-            <div className="px-3 py-2 border-b border-white/8 mb-1">
-              <p className="text-sm font-semibold text-white truncate">{user?.name || "User"}</p>
-              <p className="text-xs text-white/40 truncate">{user?.email || ""}</p>
+            <div className="px-3 py-2 border-b border-gray-100 mb-1">
+              <p className="text-sm font-semibold text-gray-900 truncate">{user?.name || "User"}</p>
+              <p className="text-xs text-gray-400 truncate">{user?.email || ""}</p>
             </div>
             <button
               onClick={handleLogout}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-white/50 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-500 hover:text-red-500 hover:bg-red-50 transition-all duration-200"
             >
               <LogOut className="w-3.5 h-3.5" />
               Sign out
