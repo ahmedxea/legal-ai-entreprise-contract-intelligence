@@ -9,6 +9,8 @@ from datetime import datetime
 import os
 import mimetypes
 
+_SESSION_COOKIE = "lexra_session"
+
 from app.models.schemas import (
     ContractUploadResponse, ContractDetail, ContractListItem,
     ContractStatus, Language,
@@ -37,11 +39,13 @@ ALLOWED_EXTENSIONS = set(settings.supported_file_types_list)
 MAX_FILE_SIZE_BYTES = settings.MAX_FILE_SIZE_MB * 1024 * 1024
 
 
-def _get_user_id_from_token(authorization: Optional[str]) -> str:
-    """Extract and validate user from auth token. Falls back to 'anonymous' for dev."""
-    if not authorization:
-        return "anonymous"
-    token = authorization.replace("Bearer ", "").strip()
+def _get_user_id_from_token(authorization: Optional[str], request: Optional[Request] = None) -> str:
+    """Extract and validate user from cookie or Bearer token. Falls back to 'anonymous' for dev."""
+    token = None
+    if request:
+        token = request.cookies.get(_SESSION_COOKIE)
+    if not token and authorization:
+        token = authorization.replace("Bearer ", "").strip()
     if not token:
         return "anonymous"
     user = validate_session(token)
@@ -54,13 +58,14 @@ def _get_user_id_from_token(authorization: Optional[str]) -> str:
 
 @router.get("/dashboard")
 async def get_dashboard_stats(
+    request: Request,
     authorization: Optional[str] = Header(None),
 ):
     """
     Return aggregated dashboard statistics for the current user.
     """
     try:
-        user_id = _get_user_id_from_token(authorization)
+        user_id = _get_user_id_from_token(authorization, request)
         all_contracts = await db_service.list_contracts(user_id=user_id, limit=1000)
 
         total = len(all_contracts)
@@ -126,6 +131,7 @@ async def get_queue_status():
 
 @router.get("/", response_model=List[ContractListItem])
 async def list_contracts(
+    request: Request,
     user_id: Optional[str] = Query(None, description="User ID"),
     status: Optional[ContractStatus] = None,
     limit: int = Query(20, le=100),
@@ -136,7 +142,7 @@ async def list_contracts(
     List contracts for a user with pagination (limit/offset).
     """
     try:
-        resolved_user_id = user_id or _get_user_id_from_token(authorization)
+        resolved_user_id = user_id or _get_user_id_from_token(authorization, request)
         contracts = await db_service.list_contracts(
             user_id=resolved_user_id,
             status=status,
@@ -166,7 +172,7 @@ async def upload_contract(
     Uses auth token to identify the user.
     """
     try:
-        user_id = _get_user_id_from_token(authorization)
+        user_id = _get_user_id_from_token(authorization, request)
 
         # Validate file type
         file_ext = os.path.splitext(file.filename or "")[1].lower()
@@ -288,7 +294,7 @@ async def analyze_contract(
     Poll GET /{contract_id} and check the `status` field for completion.
     """
     try:
-        resolved_user_id = user_id or _get_user_id_from_token(authorization)
+        resolved_user_id = user_id or _get_user_id_from_token(authorization, request)
         contract = await db_service.get_contract(contract_id, resolved_user_id)
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
@@ -341,7 +347,7 @@ async def get_contract_analysis(
     Returns 404 if the contract does not exist or analysis has not yet completed.
     """
     try:
-        resolved_user_id = user_id or _get_user_id_from_token(authorization)
+        resolved_user_id = user_id or _get_user_id_from_token(authorization, request)
         contract = await db_service.get_contract(contract_id, resolved_user_id)
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
@@ -394,7 +400,7 @@ async def get_contract(
     Get detailed information about a specific contract
     """
     try:
-        resolved_user_id = user_id or _get_user_id_from_token(authorization)
+        resolved_user_id = user_id or _get_user_id_from_token(authorization, request)
         contract = await db_service.get_contract(contract_id, resolved_user_id)
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
@@ -421,7 +427,7 @@ async def get_contract_text(
     Poll GET /{contract_id} and wait for status 'extracted' before calling this.
     """
     try:
-        resolved_user_id = user_id or _get_user_id_from_token(authorization)
+        resolved_user_id = user_id or _get_user_id_from_token(authorization, request)
 
         # Ownership check
         contract = await db_service.get_contract(contract_id, resolved_user_id)
@@ -462,7 +468,7 @@ async def get_contract_chunks(
     Returns 404 if chunking has not completed yet.
     """
     try:
-        resolved_user_id = user_id or _get_user_id_from_token(authorization)
+        resolved_user_id = user_id or _get_user_id_from_token(authorization, request)
 
         contract = await db_service.get_contract(contract_id, resolved_user_id)
         if not contract:
@@ -507,7 +513,7 @@ async def download_contract_file(
     is streamed directly.
     """
     try:
-        resolved_user_id = user_id or _get_user_id_from_token(authorization)
+        resolved_user_id = user_id or _get_user_id_from_token(authorization, request)
         contract = await db_service.get_contract(contract_id, resolved_user_id)
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
@@ -555,7 +561,7 @@ async def delete_contract(
     Delete a contract
     """
     try:
-        resolved_user_id = user_id or _get_user_id_from_token(authorization)
+        resolved_user_id = user_id or _get_user_id_from_token(authorization, request)
         # Get contract to verify ownership
         contract = await db_service.get_contract(contract_id, resolved_user_id)
         if not contract:
